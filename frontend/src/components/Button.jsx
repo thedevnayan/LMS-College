@@ -1,63 +1,50 @@
-import { motion } from 'framer-motion';
+import React from 'react';
 
 export default function Button({ 
   children, 
   variant = 'primary', 
   onClick, 
   className = '',
+  style: customStyle,
   ...props 
 }) {
-  const isPrimary = variant === 'primary';
-  const isGhost = variant === 'ghost';
-  const isMenu = variant === 'menu';
+  const baseClasses = 'button-base inline-flex items-center justify-center font-medium cursor-pointer transition-colors';
   
-  const baseClasses = 'text-body inline-flex items-center justify-center cursor-pointer border-none outline-none';
-  
-  // Design system strict rules:
-  // Primary: Sun Yellow, 160px radius, 16px 24px padding
-  // Ghost: Pure White fill, 1px black border, 96px radius, 8px 20px padding
-  // Menu: Black fill, white text, 5px radius, 8px 16px padding
-  
-  let bgColor = 'transparent';
-  let color = 'var(--color-ink)';
-  let border = 'none';
-  let radius = 'var(--radius-button)';
-  let padding = '12px 24px';
+  let styles = {
+    padding: '16px 24px',
+    borderRadius: 'var(--radius-primary-action)',
+    border: 'none',
+    fontSize: 'var(--text-body)',
+    letterSpacing: 'var(--tracking-body)'
+  };
 
-  if (isPrimary) {
-    bgColor = 'var(--color-sun-yellow)';
-    radius = 'var(--radius-primary-action)';
-    padding = '16px 24px';
-  } else if (isGhost) {
-    bgColor = 'var(--color-pure-white)';
-    border = '1px solid var(--color-ink)';
-    radius = 'var(--radius-button)';
-    padding = '8px 20px';
-  } else if (isMenu) {
-    bgColor = 'var(--color-ink)';
-    color = 'var(--color-pure-white)';
-    radius = 'var(--radius-card)'; // 5px
-    padding = '8px 16px';
+  if (variant === 'primary') {
+    styles.backgroundColor = 'var(--color-sun-yellow)';
+    styles.color = 'var(--color-ink)';
+    styles.boxShadow = 'none';
+  } else if (variant === 'ghost') {
+    styles.backgroundColor = 'var(--color-pure-white)';
+    styles.color = 'var(--color-ink)';
+    styles.border = '1px solid var(--color-ink)';
+    styles.borderRadius = 'var(--radius-buttons)';
+    styles.padding = '8px 20px';
+    styles.boxShadow = 'none';
+  } else if (variant === 'nav') {
+    styles.backgroundColor = 'var(--color-ink)';
+    styles.color = 'var(--color-pure-white)';
+    styles.borderRadius = 'var(--radius-cards)';
+    styles.padding = '8px 16px';
+    styles.boxShadow = 'none';
   }
 
   return (
-    <motion.button
+    <button
       onClick={onClick}
       className={`${baseClasses} ${className}`}
-      style={{
-        backgroundColor: bgColor,
-        color: color,
-        border: border,
-        borderRadius: radius,
-        padding: padding,
-      }}
-      // Physics-driven spring animation
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.95 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+      style={{ ...styles, ...(customStyle || {}) }}
       {...props}
     >
       {children}
-    </motion.button>
+    </button>
   );
 }

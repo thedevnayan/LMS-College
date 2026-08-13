@@ -1,23 +1,30 @@
-import { motion } from 'framer-motion';
+import React from 'react';
 
 export default function Card({ 
   children, 
   className = '', 
-  withBorder = false,
-  bgColor = 'var(--color-paper-white)',
+  color = 'paper',
   ...props 
 }) {
+  let bgColor = 'var(--color-paper-white)';
+  if (color === 'lime') bgColor = 'var(--color-lime-burst)';
+  if (color === 'yellow') bgColor = 'var(--color-sun-yellow)';
+  if (color === 'periwinkle') bgColor = 'var(--color-periwinkle)';
+  if (color === 'sand') bgColor = 'var(--color-sand)';
+
   return (
-    <motion.div
-      className={`shadow-none ${withBorder ? 'hairline-border' : ''} ${className}`}
+    <div
+      className={`card-base ${className}`}
       style={{
         backgroundColor: bgColor,
-        borderRadius: 'var(--radius-card)', // 5px
-        padding: '24px', // 20-30px internal padding
+        borderRadius: 'var(--radius-cards)',
+        padding: '24px',
+        boxShadow: 'none',
+        border: 'none',
       }}
       {...props}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }

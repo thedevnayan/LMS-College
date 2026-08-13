@@ -1,8 +1,16 @@
+@font-face {
+  font-family: 'Octagon Calligraphy';
+  src: url('/font/octagon-calligraphy.regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+}
+
 :root {
+  /* Streamtime Colors */
   --color-sun-yellow: #ffde3b;
   --color-hot-pink: #ff4dd5;
   --color-lime-burst: #c1f32b;
-  --color-periwinkle: #6483ff;
+  --color-periwinkle: #b7c5ff;
   --color-spring-green: #c6dc3c;
   --color-bubblegum: #ee84d5;
   --color-warm-linen: #f1e8de;
@@ -14,13 +22,50 @@
   --color-ink: #000000;
   --color-fog: #999999;
 
-  --radius-tag: 5px;
-  --radius-card: 5px;
-  --radius-button: 96px;
+  /* Typography Scale */
+  --text-caption: 12px;
+  --leading-caption: 1.2;
+  --tracking-caption: -0.2px;
+  
+  --text-body: 16px;
+  --leading-body: 1.2;
+  --tracking-body: -0.4px;
+  
+  --text-body-lg: 18px;
+  --leading-body-lg: 1.2;
+  --tracking-body-lg: -0.5px;
+  
+  --text-subheading: 28px;
+  --leading-subheading: 1.1;
+  --tracking-subheading: -0.8px;
+  
+  --text-heading: 30px;
+  --leading-heading: 1.1;
+  --tracking-heading: -1.02px;
+  
+  --text-heading-lg: 68px;
+  --leading-heading-lg: 1;
+  --tracking-heading-lg: -1.5px;
+  
+  --text-display: 100px;
+  --leading-display: 1;
+  --tracking-display: -2px;
+
+  /* Border Radius */
+  --radius-cards: 5px;
+  --radius-tags: 5px;
+  --radius-buttons: 96px;
   --radius-primary-action: 160px;
+
+  /* Shadows */
+  --shadow-sm: rgba(0, 0, 0, 0.13) 1px 0px 5px 0px, rgba(0, 0, 0, 0.08) 2px 2px 4px 1px;
+  --shadow-float: rgba(115, 115, 115, 0.16) 0px 3px 10px 0px, rgba(115, 115, 115, 0.16) 0px 2px 4px 0px;
+
+  /* Custom Easings (Emil Kowalski) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
-/* Reset and Global Setup */
 * {
   margin: 0;
   padding: 0;
@@ -30,40 +75,46 @@
 body {
   background-color: var(--color-warm-linen);
   color: var(--color-ink);
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  /* Strictly enforce 400 weight */
-  font-weight: 400;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-weight: 400; /* Strictly enforced */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Forcing all text elements to 400 weight to comply with design system */
-h1, h2, h3, h4, h5, h6, strong, b {
-  font-weight: 400;
+/* Base Interactions */
+.button-base {
+  transition: transform 160ms var(--ease-out);
+}
+.button-base:active {
+  transform: scale(0.97);
 }
 
-/* Typography Scale & Tracking */
-.text-caption { font-size: 12px; line-height: 1.2; letter-spacing: -0.96px; }
-.text-body { font-size: 16px; line-height: 1.2; letter-spacing: -1.28px; }
-.text-body-lg { font-size: 18px; line-height: 1.2; letter-spacing: -1.44px; }
-.text-subheading { font-size: 28px; line-height: 1.1; letter-spacing: -1.6px; }
-.text-heading { font-size: 30px; line-height: 1.1; letter-spacing: -1.02px; }
-.text-heading-lg { font-size: 68px; line-height: 1.0; letter-spacing: -2.31px; }
-.text-display { font-size: 100px; line-height: 1.0; letter-spacing: -1.4px; }
+.card-base {
+  transition: transform 200ms var(--ease-out);
+}
 
-/* Utilities */
+/* Typography Utility Classes */
+h1, h2, h3, h4, h5, h6, strong, b, .font-bold, .font-semibold {
+  font-weight: 400 !important; /* System is 400-weight only */
+}
+
+.text-caption { font-size: var(--text-caption); line-height: var(--leading-caption); letter-spacing: var(--tracking-caption); }
+.text-body { font-size: var(--text-body); line-height: var(--leading-body); letter-spacing: var(--tracking-body); }
+.text-body-lg { font-size: var(--text-body-lg); line-height: var(--leading-body-lg); letter-spacing: var(--tracking-body-lg); }
+.text-subheading { font-size: var(--text-subheading); line-height: var(--leading-subheading); letter-spacing: var(--tracking-subheading); }
+.text-heading { font-size: var(--text-heading); line-height: var(--leading-heading); letter-spacing: var(--tracking-heading); }
+.text-heading-lg { font-size: var(--text-heading-lg); line-height: var(--leading-heading-lg); letter-spacing: var(--tracking-heading-lg); }
+.text-display { font-size: var(--text-display); line-height: var(--leading-display); letter-spacing: var(--tracking-display); }
+
+/* Layout Utilities */
+.max-w-screen {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+/* Streamtime Specific Utilities */
 .hairline-border {
   border: 1px solid var(--color-ink);
-}
-
-.bg-linen { background-color: var(--color-warm-linen); }
-.bg-paper { background-color: var(--color-paper-white); }
-.bg-charcoal { background-color: var(--color-charcoal); color: var(--color-paper-white); }
-.bg-yellow { background-color: var(--color-sun-yellow); color: var(--color-ink); }
-.bg-pink { background-color: var(--color-hot-pink); }
-.bg-lime { background-color: var(--color-lime-burst); }
-
-/* No Drop Shadows Allowed for content elements */
-.shadow-none {
-  box-shadow: none !important;
 }
