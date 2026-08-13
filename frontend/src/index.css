@@ -1,0 +1,69 @@
+:root {
+  --color-sun-yellow: #ffde3b;
+  --color-hot-pink: #ff4dd5;
+  --color-lime-burst: #c1f32b;
+  --color-periwinkle: #6483ff;
+  --color-spring-green: #c6dc3c;
+  --color-bubblegum: #ee84d5;
+  --color-warm-linen: #f1e8de;
+  --color-paper-white: #fbf8f5;
+  --color-pure-white: #ffffff;
+  --color-charcoal: #2f2c29;
+  --color-stone: #c3b7ac;
+  --color-sand: #eadcce;
+  --color-ink: #000000;
+  --color-fog: #999999;
+
+  --radius-tag: 5px;
+  --radius-card: 5px;
+  --radius-button: 96px;
+  --radius-primary-action: 160px;
+}
+
+/* Reset and Global Setup */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--color-warm-linen);
+  color: var(--color-ink);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  /* Strictly enforce 400 weight */
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Forcing all text elements to 400 weight to comply with design system */
+h1, h2, h3, h4, h5, h6, strong, b {
+  font-weight: 400;
+}
+
+/* Typography Scale & Tracking */
+.text-caption { font-size: 12px; line-height: 1.2; letter-spacing: -0.96px; }
+.text-body { font-size: 16px; line-height: 1.2; letter-spacing: -1.28px; }
+.text-body-lg { font-size: 18px; line-height: 1.2; letter-spacing: -1.44px; }
+.text-subheading { font-size: 28px; line-height: 1.1; letter-spacing: -1.6px; }
+.text-heading { font-size: 30px; line-height: 1.1; letter-spacing: -1.02px; }
+.text-heading-lg { font-size: 68px; line-height: 1.0; letter-spacing: -2.31px; }
+.text-display { font-size: 100px; line-height: 1.0; letter-spacing: -1.4px; }
+
+/* Utilities */
+.hairline-border {
+  border: 1px solid var(--color-ink);
+}
+
+.bg-linen { background-color: var(--color-warm-linen); }
+.bg-paper { background-color: var(--color-paper-white); }
+.bg-charcoal { background-color: var(--color-charcoal); color: var(--color-paper-white); }
+.bg-yellow { background-color: var(--color-sun-yellow); color: var(--color-ink); }
+.bg-pink { background-color: var(--color-hot-pink); }
+.bg-lime { background-color: var(--color-lime-burst); }
+
+/* No Drop Shadows Allowed for content elements */
+.shadow-none {
+  box-shadow: none !important;
+}
