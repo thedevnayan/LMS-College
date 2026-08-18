@@ -116,7 +116,7 @@ export const materialsAPI = {
   getById: (id) => request(`/materials/${id}`),
   update: (id, data) => request(`/materials/${id}`, { method: 'PATCH', body: data }),
   delete: (id) => request(`/materials/${id}`, { method: 'DELETE' }),
-  markProgress: (id, completed) => request(`/materials/${id}/progress`, { method: 'POST', body: JSON.stringify({ completed }) }),
+  markProgress: (id, completed) => request(`/materials/${id}/progress`, { method: 'POST', body: { completed } }),
 };
 
 // ─── Tests API ───
@@ -124,10 +124,17 @@ export const materialsAPI = {
 export const testsAPI = {
   getAll: () => request('/tests'),
   listByClassroom: (classroomId) => request(`/classrooms/${classroomId}/tests`),
-  create: (classroomId, data) => request(`/classrooms/${classroomId}/tests`, { method: 'POST', body: JSON.stringify(data) }),
+  create: (classroomId, data) => request(`/classrooms/${classroomId}/tests`, { method: 'POST', body: data }),
   getById: (id) => request(`/tests/${id}`),
-  update: (id, data) => request(`/tests/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  update: (id, data) => request(`/tests/${id}`, { method: 'PATCH', body: data }),
   delete: (id) => request(`/tests/${id}`, { method: 'DELETE' }),
+};
+
+// ─── AI API ───
+
+export const aiAPI = {
+  generateQuestion: (data) => request('/ai/generate-question', { method: 'POST', body: data }),
+  generateQuestions: (data) => request('/ai/generate-questions', { method: 'POST', body: data }),
 };
 
 // ─── Classrooms API ───
@@ -163,15 +170,11 @@ export const modulesAPI = {
 export const assignmentsAPI = {
   getAll: () => request('/assignments'),
   listByClassroom: (classroomId) => request(`/classrooms/${classroomId}/assignments`),
-  create: (classroomId, data) => request(`/classrooms/${classroomId}/assignments`, { method: 'POST', body: JSON.stringify(data) }),
+  create: (classroomId, data) => request(`/classrooms/${classroomId}/assignments`, { method: 'POST', body: data }),
   getById: (id) => request(`/assignments/${id}`),
-  update: (id, data) => request(`/assignments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  update: (id, data) => request(`/assignments/${id}`, { method: 'PUT', body: data }),
   delete: (id) => request(`/assignments/${id}`, { method: 'DELETE' }),
   getSubmissions: (id) => request(`/assignments/${id}/submissions`),
 };
 
-// ─── AI API ───
 
-export const aiAPI = {
-  generateQuestions: (data) => request('/ai/generate-questions', { method: 'POST', body: data }),
-};

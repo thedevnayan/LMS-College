@@ -9,7 +9,7 @@ const testCaseSchema = new mongoose.Schema({
 const questionSchema = new mongoose.Schema({
   questionType: {
     type: String,
-    enum: ['mcq', 'long-answer', 'coding'],
+    enum: ['mcq', 'coding'],
     required: true
   },
   text: {

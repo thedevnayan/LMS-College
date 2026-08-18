@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { classroomsAPI, testsAPI } from '../services/api';
-import { ArrowLeft, Save, Plus, Trash2, Clock, CheckCircle } from 'lucide-react';
+import { classroomsAPI, testsAPI, aiAPI } from '../services/api';
+import { ArrowLeft, Save, Plus, Trash2, Clock, CheckCircle, Sparkles, X, Loader } from 'lucide-react';
 import CustomSelect from '../components/CustomSelect';
 
 export default function TestBuilder() {
@@ -22,6 +22,12 @@ export default function TestBuilder() {
     timeLimit: 0,
     questions: []
   });
+
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiType, setAiType] = useState('mcq');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   const questionsEndRef = useRef(null);
 
@@ -101,6 +107,39 @@ export default function TestBuilder() {
     setTimeout(() => {
       questionsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
+  };
+
+  const handleGenerateAI = async () => {
+    if (!aiPrompt.trim()) return setAiError('Prompt cannot be empty');
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const res = await aiAPI.generateQuestion({ prompt: aiPrompt, type: aiType });
+      if (res.success && res.data) {
+        const generated = res.data;
+        const newQ = {
+          id: Date.now().toString(),
+          questionType: aiType,
+          text: generated.text || '',
+          points: 1,
+          options: generated.options || (aiType === 'mcq' ? ['', '', '', ''] : []),
+          correctOptionIndex: generated.correctOptionIndex !== undefined ? generated.correctOptionIndex : (aiType === 'mcq' ? 0 : null),
+          codingLanguage: generated.codingLanguage || (aiType === 'coding' ? 'javascript' : ''),
+          codingTemplate: generated.codingTemplate || '',
+          testCases: generated.testCases || (aiType === 'coding' ? [{ input: '', expectedOutput: '', isHidden: false }] : [])
+        };
+        setFormData(prev => ({ ...prev, questions: [...prev.questions, newQ] }));
+        setAiModalOpen(false);
+        setAiPrompt('');
+        setTimeout(() => {
+          questionsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
+    } catch (err) {
+      setAiError(err.response?.data?.message || 'Failed to generate question');
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const handleUpdateQuestion = (index, field, value) => {
@@ -347,11 +386,12 @@ export default function TestBuilder() {
               <button onClick={() => handleAddQuestion('mcq')} className="admin-btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '100px' }}>
                 <Plus size={16} /> Add MCQ
               </button>
-              <button onClick={() => handleAddQuestion('long-answer')} className="admin-btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '100px', backgroundColor: 'transparent' }}>
-                <Plus size={16} /> Add Long Answer
-              </button>
               <button onClick={() => handleAddQuestion('coding')} className="admin-btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '100px', backgroundColor: 'transparent' }}>
                 <Plus size={16} /> Add Coding Problem
+              </button>
+              <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--color-fog)', opacity: 0.3, margin: '0 4px' }} />
+              <button onClick={() => setAiModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '100px', backgroundColor: '#fffbeb', color: '#b45309', border: '2px solid #fde68a', fontWeight: 600, cursor: 'pointer', transition: 'all 0.1s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef3c7'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fffbeb'}>
+                <Sparkles size={16} /> AI Assist
               </button>
             </div>
           </div>
@@ -430,6 +470,69 @@ export default function TestBuilder() {
 
         </div>
       </div>
+
+      {/* AI Modal */}
+      {aiModalOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 15, 18, 0.4)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
+        }}>
+          <div style={{
+            backgroundColor: 'var(--color-paper-white)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '500px',
+            border: '2px solid var(--color-ink)', boxShadow: '8px 8px 0px var(--color-ink)', position: 'relative'
+          }}>
+            <button onClick={() => setAiModalOpen(false)} style={{ position: 'absolute', top: '24px', right: '24px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-fog)' }}>
+              <X size={24} />
+            </button>
+            
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '24px', color: 'var(--color-ink)', marginBottom: '8px' }}>
+              <Sparkles size={24} color="#f59e0b" /> AI Generator
+            </h2>
+            <p style={{ color: 'var(--color-fog)', fontSize: '15px', marginBottom: '24px' }}>Describe the question you want, and Gemini will build it.</p>
+
+            {aiError && (
+              <div style={{ padding: '12px 16px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '14px', fontWeight: 500 }}>
+                {aiError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label className="admin-label">Question Type</label>
+                <select className="admin-input" value={aiType} onChange={(e) => setAiType(e.target.value)} style={{ width: '100%' }}>
+                  <option value="mcq">Multiple Choice</option>
+                  <option value="coding">Coding Problem (with Test Cases)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="admin-label">Prompt</label>
+                <textarea
+                  className="admin-input"
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="e.g., Create a medium difficulty Python problem to traverse a binary tree..."
+                  style={{ width: '100%', minHeight: '120px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <button
+                onClick={handleGenerateAI}
+                disabled={aiLoading}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', borderRadius: '12px',
+                  backgroundColor: '#f59e0b', color: 'white', border: 'none', fontSize: '16px', fontWeight: 600, cursor: aiLoading ? 'not-allowed' : 'pointer',
+                  opacity: aiLoading ? 0.7 : 1, marginTop: '8px'
+                }}
+              >
+                {aiLoading ? <Loader className="animate-spin" size={20} /> : <Sparkles size={20} />}
+                {aiLoading ? 'Generating...' : 'Generate with Gemini'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
