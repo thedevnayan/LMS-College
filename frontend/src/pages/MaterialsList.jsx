@@ -112,7 +112,7 @@ export default function MaterialsList() {
                     <span style={{ color: 'var(--color-sun-yellow)', fontWeight: 700, backgroundColor: 'var(--color-ink)', padding: '2px 8px', borderRadius: '4px' }}>
                       {material.topic}
                     </span>
-                    <span>Class: {material.classroomId?.courseId?.title} (Batch {material.classroomId?.classBatch})</span>
+                    <span>Class: {material.classroomId?.courseId?.title} (Batch {material.classroomId?.classBatch}{material.classroomId?.labBatch ? ` / Sub ${material.classroomId.labBatch}` : ''})</span>
                   </div>
                 </div>
               </div>

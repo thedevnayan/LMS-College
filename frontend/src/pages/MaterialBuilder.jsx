@@ -26,7 +26,7 @@ export default function MaterialBuilder() {
 
   const fetchClassrooms = async () => {
     try {
-      const res = await classroomsAPI.getAll();
+      const res = await classroomsAPI.list();
       if (res.success) {
         setClassrooms(res.data);
       }
@@ -37,7 +37,7 @@ export default function MaterialBuilder() {
 
   const classroomOptions = classrooms.map(c => ({
     value: c._id,
-    label: `${c.courseId?.title || 'Unknown Course'} - Batch ${c.classBatch} (${c.type})`
+    label: `${c.courseId?.title || 'Unknown Course'} - Batch ${c.classBatch}${c.labBatch ? ` / Sub ${c.labBatch}` : ''} (${c.type})`
   }));
 
   const typeOptions = [
@@ -104,7 +104,7 @@ export default function MaterialBuilder() {
             <CustomSelect
               options={classroomOptions}
               value={formData.classroomId}
-              onChange={(val) => setFormData({ ...formData, classroomId: val })}
+              onChange={(e) => setFormData({ ...formData, classroomId: e.target.value })}
               placeholder="Select a batch..."
             />
           </div>
@@ -139,7 +139,7 @@ export default function MaterialBuilder() {
             <CustomSelect
               options={typeOptions}
               value={formData.type}
-              onChange={(val) => setFormData({ ...formData, type: val })}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
             />
           </div>
 
