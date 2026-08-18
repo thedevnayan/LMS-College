@@ -116,7 +116,18 @@ export const materialsAPI = {
   getById: (id) => request(`/materials/${id}`),
   update: (id, data) => request(`/materials/${id}`, { method: 'PATCH', body: data }),
   delete: (id) => request(`/materials/${id}`, { method: 'DELETE' }),
-  markProgress: (id, completed) => request(`/materials/${id}/progress`, { method: 'POST', body: { completed } }),
+  markProgress: (id, completed) => request(`/materials/${id}/progress`, { method: 'POST', body: JSON.stringify({ completed }) }),
+};
+
+// ─── Tests API ───
+
+export const testsAPI = {
+  getAll: () => request('/tests'),
+  listByClassroom: (classroomId) => request(`/classrooms/${classroomId}/tests`),
+  create: (classroomId, data) => request(`/classrooms/${classroomId}/tests`, { method: 'POST', body: JSON.stringify(data) }),
+  getById: (id) => request(`/tests/${id}`),
+  update: (id, data) => request(`/tests/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id) => request(`/tests/${id}`, { method: 'DELETE' }),
 };
 
 // ─── Classrooms API ───

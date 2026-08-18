@@ -13,6 +13,8 @@ import AssignmentBuilder from './pages/AssignmentBuilder';
 import AssignmentReport from './pages/AssignmentReport';
 import MaterialsList from './pages/MaterialsList';
 import MaterialBuilder from './pages/MaterialBuilder';
+import TestsList from './pages/TestsList';
+import TestBuilder from './pages/TestBuilder';
 
 function App() {
   return (
@@ -42,6 +44,9 @@ function App() {
             <Route path="assignments/:id/report" element={<AssignmentReport />} />
             <Route path="materials" element={<MaterialsList />} />
             <Route path="materials/new" element={<MaterialBuilder />} />
+            <Route path="tests" element={<TestsList />} />
+            <Route path="tests/new" element={<TestBuilder />} />
+            <Route path="tests/:id/edit" element={<TestBuilder />} />
           </Route>
         </Routes>
       </Router>
