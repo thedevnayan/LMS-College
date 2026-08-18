@@ -51,18 +51,16 @@ const materialSchema = new mongoose.Schema(
 
 materialSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
-materialSchema.pre(/^find/, function (next) {
+materialSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
-  next();
 });
 
 // Cascade soft-delete to MaterialProgress
-materialSchema.pre('save', async function (next) {
+materialSchema.pre('save', async function () {
   if (this.isModified('deletedAt') && this.deletedAt !== null) {
     const MaterialProgress = mongoose.model('MaterialProgress');
     await MaterialProgress.updateMany({ materialId: this._id }, { deletedAt: this.deletedAt });
   }
-  next();
 });
 
 const Material = mongoose.model('Material', materialSchema);

@@ -35,9 +35,8 @@ batchSchema.index(
   { unique: true, partialFilterExpression: { deletedAt: null } }
 );
 
-batchSchema.pre(/^find/, function (next) {
+batchSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
-  next();
 });
 
 // Soft-deleting a batch shouldn't cascade-delete enrollments, 
@@ -45,12 +44,11 @@ batchSchema.pre(/^find/, function (next) {
 // However, since it's a soft-delete, we probably shouldn't structurally alter the enrollments right away 
 // (what if we want to restore the batch?), but the spec says "unassigns students". 
 // To strictly unassign students so they don't break the UI (since the batch is gone), we will nullify it.
-batchSchema.pre('save', async function (next) {
+batchSchema.pre('save', async function () {
   if (this.isModified('deletedAt') && this.deletedAt !== null) {
     const Enrollment = mongoose.model('Enrollment');
     await Enrollment.updateMany({ batchId: this._id }, { batchId: null });
   }
-  next();
 });
 
 const Batch = mongoose.model('Batch', batchSchema);

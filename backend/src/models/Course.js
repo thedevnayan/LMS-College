@@ -41,9 +41,8 @@ const courseSchema = new mongoose.Schema(
 courseSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
 // Pre-find hook to exclude soft-deleted items
-courseSchema.pre(/^find/, function (next) {
+courseSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
-  next();
 });
 
 // Virtual for moduleCount
@@ -58,7 +57,7 @@ courseSchema.virtual('moduleCount', {
 // so controllers will handle injecting moduleCount if necessary, or we use populate.
 
 // Cascade soft-delete to modules, enrollments, and batches
-courseSchema.pre('save', async function (next) {
+courseSchema.pre('save', async function () {
   if (this.isModified('deletedAt') && this.deletedAt !== null) {
     const Module = mongoose.model('Module');
     const Enrollment = mongoose.model('Enrollment');
@@ -71,7 +70,6 @@ courseSchema.pre('save', async function (next) {
     await MaterialProgress.updateMany({ courseId: this._id }, { deletedAt: this.deletedAt });
     await Batch.updateMany({ courseId: this._id }, { deletedAt: this.deletedAt });
   }
-  next();
 });
 
 const Course = mongoose.model('Course', courseSchema);

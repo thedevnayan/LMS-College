@@ -58,9 +58,8 @@ const quizSchema = new mongoose.Schema(
 
 quizSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
-quizSchema.pre(/^find/, function (next) {
+quizSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
-  next();
 });
 
 // Strip correctAnswerIndex when returning to students
@@ -80,12 +79,11 @@ quizSchema.set('toJSON', {
 });
 
 // Cascade soft-delete to QuizAttempts
-quizSchema.pre('save', async function (next) {
+quizSchema.pre('save', async function () {
   if (this.isModified('deletedAt') && this.deletedAt !== null) {
     const QuizAttempt = mongoose.model('QuizAttempt');
     await QuizAttempt.updateMany({ quizId: this._id }, { deletedAt: this.deletedAt });
   }
-  next();
 });
 
 const Quiz = mongoose.model('Quiz', quizSchema);

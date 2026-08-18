@@ -41,9 +41,8 @@ materialProgressSchema.index(
   { unique: true, partialFilterExpression: { deletedAt: null } }
 );
 
-materialProgressSchema.pre(/^find/, function (next) {
+materialProgressSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
-  next();
 });
 
 const MaterialProgress = mongoose.model('MaterialProgress', materialProgressSchema);

@@ -41,18 +41,16 @@ const assignmentSchema = new mongoose.Schema(
 // TTL Index for soft deletes
 assignmentSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
-assignmentSchema.pre(/^find/, function (next) {
+assignmentSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
-  next();
 });
 
 // Cascade soft-delete to Submissions
-assignmentSchema.pre('save', async function (next) {
+assignmentSchema.pre('save', async function () {
   if (this.isModified('deletedAt') && this.deletedAt !== null) {
     const Submission = mongoose.model('Submission');
     await Submission.updateMany({ assignmentId: this._id }, { deletedAt: this.deletedAt });
   }
-  next();
 });
 
 const Assignment = mongoose.model('Assignment', assignmentSchema);

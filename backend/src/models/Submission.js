@@ -68,9 +68,8 @@ submissionSchema.index(
   { unique: true, partialFilterExpression: { deletedAt: null } }
 );
 
-submissionSchema.pre(/^find/, function (next) {
+submissionSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
-  next();
 });
 
 const Submission = mongoose.model('Submission', submissionSchema);

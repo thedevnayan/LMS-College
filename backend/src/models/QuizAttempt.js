@@ -59,9 +59,8 @@ quizAttemptSchema.index(
   { unique: true, partialFilterExpression: { deletedAt: null } }
 );
 
-quizAttemptSchema.pre(/^find/, function (next) {
+quizAttemptSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
-  next();
 });
 
 const QuizAttempt = mongoose.model('QuizAttempt', quizAttemptSchema);

@@ -118,3 +118,122 @@ h1, h2, h3, h4, h5, h6, strong, b, .font-bold, .font-semibold {
 .hairline-border {
   border: 1px solid var(--color-ink);
 }
+
+/* ═══════════════════════════════════════════════
+   Admin Panel — Theme Styles
+   ═══════════════════════════════════════════════ */
+
+/* Admin form inputs */
+.admin-input {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius-cards);
+  border: 1px solid var(--color-ink);
+  background-color: var(--color-pure-white);
+  color: var(--color-ink);
+  font-size: var(--text-body);
+  outline: none;
+  transition: box-shadow 200ms ease;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+.admin-input:focus {
+  box-shadow: 2px 2px 0px var(--color-ink);
+}
+.admin-input option {
+  background-color: var(--color-pure-white);
+  color: var(--color-ink);
+}
+
+/* Admin labels */
+.admin-label {
+  display: block;
+  color: var(--color-ink);
+  font-size: var(--text-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caption);
+  margin-bottom: 8px;
+  font-weight: 400;
+}
+
+/* Admin hint text */
+.admin-hint {
+  color: var(--color-fog);
+  font-size: var(--text-caption);
+  margin-top: 6px;
+}
+
+/* Admin badge */
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-tags);
+  border: 1px solid var(--color-ink);
+  background-color: var(--color-pure-white);
+  color: var(--color-ink);
+  font-size: var(--text-caption);
+  white-space: nowrap;
+}
+
+/* Admin outline button */
+.admin-btn-outline {
+  padding: 8px 20px;
+  border-radius: var(--radius-buttons);
+  border: 1px solid var(--color-ink);
+  background-color: var(--color-pure-white);
+  color: var(--color-ink);
+  font-size: var(--text-body);
+  cursor: pointer;
+  transition: all 200ms ease;
+  font-family: inherit;
+}
+.admin-btn-outline:hover {
+  background-color: var(--color-paper-white);
+}
+
+/* Admin sidebar button */
+.admin-sidebar-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-cards);
+  border: none;
+  background: none;
+  color: var(--color-ink);
+  cursor: pointer;
+  font-size: var(--text-body);
+  transition: all 200ms ease;
+  width: 100%;
+  font-family: inherit;
+}
+.admin-sidebar-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Loading spinner */
+@keyframes adminSpin {
+  to { transform: rotate(360deg); }
+}
+.admin-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-top-color: var(--color-ink);
+  border-radius: 50%;
+  animation: adminSpin 0.8s linear infinite;
+}
+.admin-spinner-sm {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-top-color: var(--color-ink);
+  border-radius: 50%;
+  animation: adminSpin 0.8s linear infinite;
+}
+
+/* Spin animation for refresh icon */
+.admin-spin {
+  animation: adminSpin 1s linear infinite;
+}

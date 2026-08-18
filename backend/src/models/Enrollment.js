@@ -17,6 +17,15 @@ const enrollmentSchema = new mongoose.Schema(
       ref: 'Batch',
       default: null, // Nullable until assigned by professor
     },
+    classroomId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Classroom',
+      default: null, // Set when student joins via classroom code
+    },
+    labBatch: {
+      type: String,
+      default: null, // e.g. "A1" — assigned by professor for lab classrooms
+    },
     enrolledAt: {
       type: Date,
       default: Date.now,
@@ -42,9 +51,8 @@ enrollmentSchema.index(
   { unique: true, partialFilterExpression: { deletedAt: null } }
 );
 
-enrollmentSchema.pre(/^find/, function (next) {
+enrollmentSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
-  next();
 });
 
 const Enrollment = mongoose.model('Enrollment', enrollmentSchema);

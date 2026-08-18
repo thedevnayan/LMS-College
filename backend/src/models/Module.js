@@ -34,13 +34,12 @@ const moduleSchema = new mongoose.Schema(
 moduleSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
 // Pre-find hook to exclude soft-deleted items
-moduleSchema.pre(/^find/, function (next) {
+moduleSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
-  next();
 });
 
 // Cascade soft-delete to Materials, Assignments, and Quizzes
-moduleSchema.pre('save', async function (next) {
+moduleSchema.pre('save', async function () {
   if (this.isModified('deletedAt') && this.deletedAt !== null) {
     const Material = mongoose.model('Material');
     const Assignment = mongoose.model('Assignment');
@@ -50,7 +49,6 @@ moduleSchema.pre('save', async function (next) {
     await Assignment.updateMany({ moduleId: this._id }, { deletedAt: this.deletedAt });
     await Quiz.updateMany({ moduleId: this._id }, { deletedAt: this.deletedAt });
   }
-  next();
 });
 
 const Module = mongoose.model('Module', moduleSchema);
