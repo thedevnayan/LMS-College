@@ -1,10 +1,14 @@
 const mongoose = require('mongoose');
 
+function arrayLimit(val) {
+  return val.length <= 4;
+}
+
 const assignmentSchema = new mongoose.Schema(
   {
-    moduleId: {
+    classroomId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Module',
+      ref: 'Classroom',
       required: true,
     },
     title: {
@@ -16,9 +20,13 @@ const assignmentSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    startDate: {
+      type: Date,
+      required: [true, 'Start date is required'],
+    },
     dueDate: {
       type: Date,
-      required: [true, 'Due date is required'],
+      required: [true, 'End date is required'],
     },
     maxMarks: {
       type: Number,
@@ -28,6 +36,27 @@ const assignmentSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    questions: [
+      {
+        text: {
+          type: String,
+          required: true,
+        },
+        options: {
+          type: [String],
+          validate: [arrayLimit, '{PATH} exceeds the limit of 4'],
+          default: ['', '', '', ''],
+        },
+        correctOptionIndex: {
+          type: Number,
+          default: 0,
+        },
+        marks: {
+          type: Number,
+          default: 1,
+        },
+      }
+    ],
     deletedAt: {
       type: Date,
       default: null,

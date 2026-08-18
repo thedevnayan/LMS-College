@@ -279,151 +279,206 @@ export default function AdminDashboard() {
           gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
           gap: '16px',
         }}>
-          <AnimatePresence>
-            {filteredClassrooms.map((classroom, i) => (
-              <motion.div
-                key={classroom._id}
-                custom={i}
-                initial="hidden"
-                animate="visible"
-                variants={staggerChild}
-                layout
-                style={{
-                  backgroundColor: 'var(--color-paper-white)',
-                  borderRadius: 'var(--radius-cards)',
-                  border: '1px solid var(--color-ink)',
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  transition: 'box-shadow 200ms ease',
-                }}
-                onClick={() => navigate(`/admin/classrooms/${classroom._id}`)}
-                onMouseEnter={(e) => e.currentTarget.style.boxShadow = '4px 4px 0px var(--color-ink)'}
-                onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
-              >
-                {/* Top color bar */}
-                <div style={{
-                  height: '4px',
-                  background: classroom.type === 'lab'
-                    ? 'linear-gradient(90deg, #ff4dd5, #b7c5ff)'
-                    : 'linear-gradient(90deg, #ffde3b, #c1f32b)',
-                }} />
-
-                <div style={{ padding: '20px' }}>
-                  {/* Header */}
+            <AnimatePresence>
+              {Object.values(filteredClassrooms.reduce((acc, c) => {
+                const key = c.type === 'lab' ? `${c.courseId?._id}-${c.session}-${c.classBatch}-${c.type}` : c._id;
+                if (!acc[key]) {
+                  acc[key] = {
+                    ...c,
+                    idKey: key,
+                    totalStudents: c.studentCount || 0,
+                    subBatches: c.type === 'lab' && c.labBatch ? [{
+                      _id: c._id,
+                      labBatch: c.labBatch,
+                      joinCode: c.joinCode,
+                      studentCount: c.studentCount || 0
+                    }] : []
+                  };
+                } else {
+                  if (c.labBatch) {
+                    acc[key].subBatches.push({
+                      _id: c._id,
+                      labBatch: c.labBatch,
+                      joinCode: c.joinCode,
+                      studentCount: c.studentCount || 0
+                    });
+                  }
+                  acc[key].totalStudents += (c.studentCount || 0);
+                }
+                return acc;
+              }, {})).map((group, i) => (
+                <motion.div
+                  key={group.idKey}
+                  custom={i}
+                  initial="hidden"
+                  animate="visible"
+                  variants={staggerChild}
+                  layout
+                  style={{
+                    backgroundColor: 'var(--color-paper-white)',
+                    borderRadius: 'var(--radius-cards)',
+                    border: '1px solid var(--color-ink)',
+                    overflow: 'hidden',
+                    cursor: group.type === 'theory' ? 'pointer' : 'default',
+                    transition: 'box-shadow 200ms ease',
+                  }}
+                  onClick={() => group.type === 'theory' && navigate(`/admin/classrooms/${group._id}`)}
+                  onMouseEnter={(e) => group.type === 'theory' && (e.currentTarget.style.boxShadow = '4px 4px 0px var(--color-ink)')}
+                  onMouseLeave={(e) => group.type === 'theory' && (e.currentTarget.style.boxShadow = 'none')}
+                >
+                  {/* Top color bar */}
                   <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    marginBottom: '16px',
-                  }}>
-                    <div>
-                      <div style={{
-                        color: 'var(--color-ink)',
-                        fontSize: '16px',
-                        letterSpacing: '-0.3px',
-                        marginBottom: '4px',
-                        fontWeight: 600,
-                      }}>
-                        {classroom.courseId?.title || 'Untitled Course'}
-                      </div>
-                      <div style={{
-                        display: 'flex',
-                        gap: '6px',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                      }}>
-                        <span className="admin-badge" style={{
-                          backgroundColor: classroom.type === 'lab'
-                            ? 'rgba(255,77,213,0.12)' : 'rgba(255,222,59,0.12)',
-                          color: classroom.type === 'lab' ? '#ff4dd5' : '#ffde3b',
+                    height: '4px',
+                    background: group.type === 'lab'
+                      ? 'linear-gradient(90deg, #ff4dd5, #b7c5ff)'
+                      : 'linear-gradient(90deg, #ffde3b, #c1f32b)',
+                  }} />
+
+                  <div style={{ padding: '20px' }}>
+                    {/* Header */}
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      marginBottom: group.type === 'lab' ? '8px' : '16px',
+                    }}>
+                      <div>
+                        <div style={{
+                          color: 'var(--color-ink)',
+                          fontSize: '16px',
+                          letterSpacing: '-0.3px',
+                          marginBottom: '4px',
+                          fontWeight: 600,
                         }}>
-                          {classroom.type === 'lab' ? '🔬 Lab' : '📖 Theory'}
-                        </span>
-                        <span className="admin-badge">
-                          Batch {classroom.classBatch}
-                        </span>
-                        <span className="admin-badge">
-                          {classroom.session}
-                        </span>
-                      </div>
-                    </div>
-                    <ChevronRight size={18} color="var(--color-fog)" />
-                  </div>
-
-                  {/* Lab Batch */}
-                  {classroom.type === 'lab' && classroom.labBatch && (
-                    <div style={{
-                      display: 'flex',
-                      gap: '6px',
-                      marginBottom: '16px',
-                      flexWrap: 'wrap',
-                    }}>
-                      <span style={{
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        backgroundColor: 'rgba(255,77,213,0.1)',
-                        color: '#ff4dd5',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                      }}>
-                        Sub-batch: {classroom.labBatch}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Bottom row: Join code + student count */}
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    paddingTop: '16px',
-                    borderTop: '1px solid var(--color-ink)',
-                  }}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        cursor: 'pointer',
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyCode(classroom.joinCode);
-                      }}
-                    >
-                      <span style={{
-                        fontFamily: 'monospace',
-                        fontSize: '18px',
-                        letterSpacing: '3px',
-                        color: 'var(--color-ink)',
-                        fontWeight: 600,
-                      }}>
-                        {classroom.joinCode}
-                      </span>
-                      <motion.div
-                        whileTap={{ scale: 0.85 }}
-                        style={{
-                          color: copiedCode === classroom.joinCode ? 'var(--color-spring-green)' : 'var(--color-fog)',
+                          {group.courseId?.title || 'Untitled Course'}
+                        </div>
+                        <div style={{
                           display: 'flex',
-                        }}
-                      >
-                        {copiedCode === classroom.joinCode ? <Check size={16} /> : <Copy size={16} />}
-                      </motion.div>
+                          gap: '6px',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                        }}>
+                          <span className="admin-badge" style={{
+                            backgroundColor: group.type === 'lab'
+                              ? 'rgba(255,77,213,0.15)' : 'rgba(255,222,59,0.25)',
+                            color: 'var(--color-ink)',
+                          }}>
+                            {group.type === 'lab' ? '🔬 Lab' : '📖 Theory'}
+                          </span>
+                          <span className="admin-badge">
+                            Batch {group.classBatch}
+                          </span>
+                          <span className="admin-badge">
+                            {group.session}
+                          </span>
+                        </div>
+                      </div>
+                      {group.type === 'theory' && <ChevronRight size={18} color="var(--color-fog)" />}
                     </div>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      color: 'var(--color-fog)',
-                      fontSize: '13px',
-                    }}>
-                      <Users size={14} />
-                      {classroom.studentCount || 0}
-                    </div>
+
+                    {/* Body */}
+                    {group.type === 'lab' ? (
+                      <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {group.subBatches.sort((a, b) => a.labBatch.localeCompare(b.labBatch)).map(sb => (
+                          <div 
+                            key={sb._id}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/admin/classrooms/${sb._id}`); }}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '12px',
+                              borderRadius: '8px',
+                              backgroundColor: 'rgba(0,0,0,0.02)',
+                              border: '1px solid rgba(0,0,0,0.05)',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.04)';
+                              e.currentTarget.style.borderColor = 'rgba(255,77,213,0.3)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.02)';
+                              e.currentTarget.style.borderColor = 'rgba(0,0,0,0.05)';
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <span style={{
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                backgroundColor: 'rgba(255,77,213,0.15)',
+                                color: 'var(--color-ink)',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                              }}>
+                                {sb.labBatch}
+                              </span>
+                              <span style={{ fontFamily: 'monospace', fontSize: '14px', letterSpacing: '2px', fontWeight: 600, color: 'var(--color-ink)' }}>
+                                {sb.joinCode}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-fog)', fontSize: '12px' }}>
+                              <Users size={12} />
+                              {sb.studentCount}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        paddingTop: '16px',
+                        borderTop: '1px solid var(--color-ink)',
+                      }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            cursor: 'pointer',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyCode(group.joinCode);
+                          }}
+                        >
+                          <span style={{
+                            fontFamily: 'monospace',
+                            fontSize: '18px',
+                            letterSpacing: '3px',
+                            color: 'var(--color-ink)',
+                            fontWeight: 600,
+                          }}>
+                            {group.joinCode}
+                          </span>
+                          <motion.div
+                            whileTap={{ scale: 0.85 }}
+                            style={{
+                              color: copiedCode === group.joinCode ? 'var(--color-spring-green)' : 'var(--color-fog)',
+                              display: 'flex',
+                            }}
+                          >
+                            {copiedCode === group.joinCode ? <Check size={16} /> : <Copy size={16} />}
+                          </motion.div>
+                        </div>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          color: 'var(--color-fog)',
+                          fontSize: '13px',
+                        }}>
+                          <Users size={14} />
+                          {group.totalStudents}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              ))}
           </AnimatePresence>
         </div>
       )}

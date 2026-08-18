@@ -1,5 +1,5 @@
 const Material = require('../models/Material');
-const Module = require('../models/Module');
+const Classroom = require('../models/Classroom');
 const Course = require('../models/Course');
 const MaterialProgress = require('../models/MaterialProgress');
 const asyncHandler = require('../utils/asyncHandler');
@@ -7,16 +7,14 @@ const { successResponse } = require('../utils/response');
 const { ApiError } = require('../middleware/errorHandler');
 
 /**
- * Helper to check access
+ * Helper to get classroom and verify access
  */
-const getAccessDetails = async (moduleId, user) => {
-  const moduleObj = await Module.findById(moduleId);
-  if (!moduleObj) throw new ApiError(404, 'NOT_FOUND', 'Module not found');
+const getAccessDetails = async (classroomId, user) => {
+  const classroom = await Classroom.findById(classroomId).populate('courseId');
+  if (!classroom) throw new ApiError(404, 'NOT_FOUND', 'Classroom not found');
 
-  const course = await Course.findById(moduleObj.courseId);
-  if (!course) throw new ApiError(404, 'NOT_FOUND', 'Course not found');
-
-  const isOwner = course.professorId.toString() === user._id.toString();
+  const course = classroom.courseId;
+  const isOwner = classroom.professorId.toString() === user._id.toString();
 
   if (user.role === 'student') {
     const Enrollment = require('../models/Enrollment');
@@ -28,20 +26,19 @@ const getAccessDetails = async (moduleId, user) => {
     throw new ApiError(403, 'FORBIDDEN', 'Not authorized');
   }
 
-  return { moduleObj, course };
+  return { classroom, course, isOwner };
 };
 
 /**
- * @route   GET /api/modules/:moduleId/materials
+ * @route   GET /api/classrooms/:classroomId/materials
  * @access  Authenticated (Professor own, or Student enrolled)
  */
 const getMaterials = asyncHandler(async (req, res, next) => {
-  const { course } = await getAccessDetails(req.params.moduleId, req.user);
+  await getAccessDetails(req.params.classroomId, req.user);
 
-  let materials = await Material.find({ moduleId: req.params.moduleId }).sort('order').lean();
+  let materials = await Material.find({ classroomId: req.params.classroomId }).sort('createdAt').lean();
 
   if (req.user.role === 'student') {
-    // Inject completed status
     const materialIds = materials.map((m) => m._id);
     const progress = await MaterialProgress.find({
       studentId: req.user._id,
@@ -63,22 +60,57 @@ const getMaterials = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * @route   POST /api/modules/:moduleId/materials
+ * @route   GET /api/materials
+ * @access  Professor (All materials for all their classrooms)
+ */
+const getAllMaterialsForProfessor = asyncHandler(async (req, res, next) => {
+  if (req.user.role !== 'professor') {
+    return next(new ApiError(403, 'FORBIDDEN', 'Only professors can view all materials'));
+  }
+
+  const classrooms = await Classroom.find({ professorId: req.user._id }).select('_id');
+  const classroomIds = classrooms.map(c => c._id);
+
+  const materials = await Material.find({ classroomId: { $in: classroomIds } })
+    .populate({
+      path: 'classroomId',
+      select: 'courseId classBatch type labBatch',
+      populate: { path: 'courseId', select: 'title' }
+    })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  res.status(200).json(successResponse(materials));
+});
+
+/**
+ * @route   POST /api/classrooms/:classroomId/materials
  * @access  Professor (Owner only)
  */
 const createMaterial = asyncHandler(async (req, res, next) => {
-  await getAccessDetails(req.params.moduleId, req.user);
+  await getAccessDetails(req.params.classroomId, req.user);
 
-  const { title, type, url, content, description, order } = req.body;
+  const { title, topic, type, content, description, order } = req.body;
+  let url = req.body.url;
+
+  // If a file was uploaded via multer+cloudinary, it will be in req.file.path
+  if (req.file && req.file.path) {
+    url = req.file.path;
+  }
+
+  if (!url && type !== 'text') {
+    return next(new ApiError(400, 'VALIDATION_ERROR', 'File or URL is required for this material type'));
+  }
 
   const material = await Material.create({
-    moduleId: req.params.moduleId,
+    classroomId: req.params.classroomId,
     title,
+    topic,
     type,
     url,
     content,
     description,
-    order,
+    order: order || 1,
   });
 
   res.status(201).json(successResponse(material));
@@ -86,13 +118,20 @@ const createMaterial = asyncHandler(async (req, res, next) => {
 
 /**
  * @route   GET /api/materials/:id
- * @access  Authenticated (Professor own, or Student enrolled)
+ * @access  Authenticated
  */
 const getMaterialById = asyncHandler(async (req, res, next) => {
-  const material = await Material.findById(req.params.id).lean();
+  const material = await Material.findById(req.params.id)
+    .populate({
+      path: 'classroomId',
+      select: 'courseId classBatch type labBatch',
+      populate: { path: 'courseId', select: 'title' }
+    })
+    .lean();
+
   if (!material) return next(new ApiError(404, 'NOT_FOUND', 'Material not found'));
 
-  await getAccessDetails(material.moduleId, req.user);
+  await getAccessDetails(material.classroomId._id || material.classroomId, req.user);
 
   if (req.user.role === 'student') {
     const progress = await MaterialProgress.findOne({
@@ -107,16 +146,23 @@ const getMaterialById = asyncHandler(async (req, res, next) => {
 
 /**
  * @route   PATCH /api/materials/:id
- * @access  Professor (Owner only)
+ * @access  Professor
  */
 const updateMaterial = asyncHandler(async (req, res, next) => {
   const material = await Material.findById(req.params.id);
   if (!material) return next(new ApiError(404, 'NOT_FOUND', 'Material not found'));
 
-  await getAccessDetails(material.moduleId, req.user);
+  await getAccessDetails(material.classroomId, req.user);
 
-  const { title, type, url, content, description, order } = req.body;
+  const { title, topic, type, content, description, order } = req.body;
+  let url = req.body.url;
+
+  if (req.file && req.file.path) {
+    url = req.file.path;
+  }
+
   if (title) material.title = title;
+  if (topic) material.topic = topic;
   if (type) material.type = type;
   if (url !== undefined) material.url = url;
   if (content !== undefined) material.content = content;
@@ -130,13 +176,13 @@ const updateMaterial = asyncHandler(async (req, res, next) => {
 
 /**
  * @route   DELETE /api/materials/:id
- * @access  Professor (Owner only)
+ * @access  Professor
  */
 const deleteMaterial = asyncHandler(async (req, res, next) => {
   const material = await Material.findById(req.params.id);
   if (!material) return next(new ApiError(404, 'NOT_FOUND', 'Material not found'));
 
-  await getAccessDetails(material.moduleId, req.user);
+  await getAccessDetails(material.classroomId, req.user);
 
   material.deletedAt = new Date();
   await material.save();
@@ -144,55 +190,11 @@ const deleteMaterial = asyncHandler(async (req, res, next) => {
   res.status(200).json(successResponse({}, 'Material deleted'));
 });
 
-/**
- * @route   POST /api/materials/:id/progress
- * @access  Student (Enrolled only)
- */
-const markProgress = asyncHandler(async (req, res, next) => {
-  const material = await Material.findById(req.params.id);
-  if (!material) return next(new ApiError(404, 'NOT_FOUND', 'Material not found'));
-
-  const { course } = await getAccessDetails(material.moduleId, req.user);
-
-  const completed = req.body.completed === true;
-
-  await MaterialProgress.findOneAndUpdate(
-    { studentId: req.user._id, materialId: material._id },
-    {
-      studentId: req.user._id,
-      materialId: material._id,
-      courseId: course._id,
-      completed,
-      completedAt: completed ? new Date() : null,
-    },
-    { upsert: true, new: true, runValidators: true }
-  );
-
-  // Recalculate course progress percentage
-  const totalMaterials = await Material.countDocuments({
-    moduleId: { $in: await Module.find({ courseId: course._id }).distinct('_id') }
-  });
-
-  const completedMaterials = await MaterialProgress.countDocuments({
-    studentId: req.user._id,
-    courseId: course._id,
-    completed: true,
-  });
-
-  const courseProgressPercent = totalMaterials === 0 ? 0 : Math.round((completedMaterials / totalMaterials) * 100);
-
-  res.status(200).json(successResponse({
-    materialId: material._id,
-    completed,
-    courseProgressPercent,
-  }));
-});
-
 module.exports = {
   getMaterials,
+  getAllMaterialsForProfessor,
   createMaterial,
   getMaterialById,
   updateMaterial,
   deleteMaterial,
-  markProgress,
 };

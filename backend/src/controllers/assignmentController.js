@@ -7,16 +7,15 @@ const { successResponse } = require('../utils/response');
 const { ApiError } = require('../middleware/errorHandler');
 
 /**
- * Helper to get module and course and verify access
+ * Helper to get classroom and course and verify access
  */
-const getAccessDetails = async (moduleId, user) => {
-  const moduleObj = await Module.findById(moduleId);
-  if (!moduleObj) throw new ApiError(404, 'NOT_FOUND', 'Module not found');
+const getAccessDetails = async (classroomId, user) => {
+  const Classroom = require('../models/Classroom');
+  const classroom = await Classroom.findById(classroomId).populate('courseId');
+  if (!classroom) throw new ApiError(404, 'NOT_FOUND', 'Classroom not found');
 
-  const course = await Course.findById(moduleObj.courseId);
-  if (!course) throw new ApiError(404, 'NOT_FOUND', 'Course not found');
-
-  const isOwner = course.professorId.toString() === user._id.toString();
+  const course = classroom.courseId;
+  const isOwner = classroom.professorId.toString() === user._id.toString();
 
   if (user.role === 'student') {
     const Enrollment = require('../models/Enrollment');
@@ -28,17 +27,17 @@ const getAccessDetails = async (moduleId, user) => {
     throw new ApiError(403, 'FORBIDDEN', 'Not authorized');
   }
 
-  return { moduleObj, course, isOwner };
+  return { classroom, course, isOwner };
 };
 
 /**
- * @route   GET /api/modules/:moduleId/assignments
+ * @route   GET /api/classrooms/:classroomId/assignments
  * @access  Authenticated (Professor own, or Student enrolled)
  */
 const getAssignments = asyncHandler(async (req, res, next) => {
-  await getAccessDetails(req.params.moduleId, req.user);
+  await getAccessDetails(req.params.classroomId, req.user);
 
-  let assignments = await Assignment.find({ moduleId: req.params.moduleId }).lean();
+  let assignments = await Assignment.find({ classroomId: req.params.classroomId }).lean();
 
   if (req.user.role === 'student') {
     const assignmentIds = assignments.map((a) => a._id);
@@ -63,21 +62,56 @@ const getAssignments = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * @route   POST /api/modules/:moduleId/assignments
+ * @route   GET /api/assignments
+ * @access  Professor (Owner only)
+ */
+const getAllAssignmentsForProfessor = asyncHandler(async (req, res, next) => {
+  const Classroom = require('../models/Classroom');
+  
+  // Find all classrooms owned by the professor
+  const classrooms = await Classroom.find({ professorId: req.user._id }).populate('courseId', 'title').lean();
+  const classroomIds = classrooms.map(c => c._id);
+
+  // Find all assignments for these classrooms
+  const assignments = await Assignment.find({ classroomId: { $in: classroomIds } }).lean();
+
+  const classroomMap = {};
+  classrooms.forEach(c => classroomMap[c._id] = c);
+
+  const enrichedAssignments = assignments.map(a => {
+    const cls = classroomMap[a.classroomId] || {};
+    const batchStr = cls.type === 'lab' && cls.labBatch 
+      ? `Batch ${cls.classBatch} (${cls.labBatch}) - Lab` 
+      : `Batch ${cls.classBatch} - Theory`;
+
+    return {
+      ...a,
+      courseTitle: cls.courseId?.title || 'Unknown Course',
+      batchName: batchStr,
+    };
+  });
+
+  res.status(200).json(successResponse(enrichedAssignments));
+});
+
+/**
+ * @route   POST /api/classrooms/:classroomId/assignments
  * @access  Professor (Owner only)
  */
 const createAssignment = asyncHandler(async (req, res, next) => {
-  await getAccessDetails(req.params.moduleId, req.user);
+  await getAccessDetails(req.params.classroomId, req.user);
 
-  const { title, description, dueDate, maxMarks, attachments } = req.body;
+  const { title, description, startDate, dueDate, maxMarks, attachments, questions } = req.body;
 
   const assignment = await Assignment.create({
-    moduleId: req.params.moduleId,
+    classroomId: req.params.classroomId,
     title,
     description,
+    startDate,
     dueDate,
     maxMarks,
     attachments: attachments || [],
+    questions: questions || [],
   });
 
   res.status(201).json(successResponse(assignment));
@@ -88,10 +122,16 @@ const createAssignment = asyncHandler(async (req, res, next) => {
  * @access  Authenticated (Professor own, or Student enrolled)
  */
 const getAssignmentById = asyncHandler(async (req, res, next) => {
-  const assignment = await Assignment.findById(req.params.id).lean();
+  const assignment = await Assignment.findById(req.params.id)
+    .populate({
+      path: 'classroomId',
+      select: 'courseId classBatch type labBatch',
+      populate: { path: 'courseId', select: 'title' }
+    })
+    .lean();
   if (!assignment) return next(new ApiError(404, 'NOT_FOUND', 'Assignment not found'));
 
-  await getAccessDetails(assignment.moduleId, req.user);
+  await getAccessDetails(assignment.classroomId, req.user);
 
   if (req.user.role === 'student') {
     const submission = await Submission.findOne({
@@ -113,15 +153,17 @@ const updateAssignment = asyncHandler(async (req, res, next) => {
   const assignment = await Assignment.findById(req.params.id);
   if (!assignment) return next(new ApiError(404, 'NOT_FOUND', 'Assignment not found'));
 
-  await getAccessDetails(assignment.moduleId, req.user);
+  await getAccessDetails(assignment.classroomId, req.user);
 
-  const { title, description, dueDate, maxMarks, attachments } = req.body;
+  const { title, description, startDate, dueDate, maxMarks, attachments, questions } = req.body;
 
   if (title) assignment.title = title;
   if (description !== undefined) assignment.description = description;
+  if (startDate) assignment.startDate = startDate;
   if (dueDate) assignment.dueDate = dueDate;
   if (maxMarks) assignment.maxMarks = maxMarks;
   if (attachments) assignment.attachments = attachments;
+  if (questions) assignment.questions = questions;
 
   await assignment.save();
 
@@ -136,7 +178,7 @@ const deleteAssignment = asyncHandler(async (req, res, next) => {
   const assignment = await Assignment.findById(req.params.id);
   if (!assignment) return next(new ApiError(404, 'NOT_FOUND', 'Assignment not found'));
 
-  await getAccessDetails(assignment.moduleId, req.user);
+  await getAccessDetails(assignment.classroomId, req.user);
 
   assignment.deletedAt = new Date();
   await assignment.save(); // cascades to submissions
@@ -152,7 +194,7 @@ const getAssignmentSubmissions = asyncHandler(async (req, res, next) => {
   const assignment = await Assignment.findById(req.params.id);
   if (!assignment) return next(new ApiError(404, 'NOT_FOUND', 'Assignment not found'));
 
-  await getAccessDetails(assignment.moduleId, req.user);
+  await getAccessDetails(assignment.classroomId, req.user);
 
   const submissions = await Submission.find({ assignmentId: assignment._id })
     .populate('studentId', 'name email avatarUrl');
@@ -162,6 +204,7 @@ const getAssignmentSubmissions = asyncHandler(async (req, res, next) => {
 
 module.exports = {
   getAssignments,
+  getAllAssignmentsForProfessor,
   createAssignment,
   getAssignmentById,
   updateAssignment,

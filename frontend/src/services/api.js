@@ -107,6 +107,18 @@ export const coursesAPI = {
   delete: (id) => request(`/courses/${id}`, { method: 'DELETE' }),
 };
 
+// ─── Materials API ───
+
+export const materialsAPI = {
+  getAll: () => request('/materials'),
+  listByClassroom: (classroomId) => request(`/classrooms/${classroomId}/materials`),
+  create: (classroomId, data) => request(`/classrooms/${classroomId}/materials`, { method: 'POST', body: data }), // data is FormData
+  getById: (id) => request(`/materials/${id}`),
+  update: (id, data) => request(`/materials/${id}`, { method: 'PATCH', body: data }),
+  delete: (id) => request(`/materials/${id}`, { method: 'DELETE' }),
+  markProgress: (id, completed) => request(`/materials/${id}/progress`, { method: 'POST', body: { completed } }),
+};
+
 // ─── Classrooms API ───
 
 export const classroomsAPI = {
@@ -127,4 +139,28 @@ export const classroomsAPI = {
 
   regenerateCode: (id) =>
     request(`/classrooms/${id}/regenerate-code`, { method: 'POST' }),
+};
+
+// ─── Modules API ───
+
+export const modulesAPI = {
+  list: (courseId) => request(`/courses/${courseId}/modules`),
+};
+
+// ─── Assignments API ───
+
+export const assignmentsAPI = {
+  getAll: () => request('/assignments'),
+  listByClassroom: (classroomId) => request(`/classrooms/${classroomId}/assignments`),
+  create: (classroomId, data) => request(`/classrooms/${classroomId}/assignments`, { method: 'POST', body: JSON.stringify(data) }),
+  getById: (id) => request(`/assignments/${id}`),
+  update: (id, data) => request(`/assignments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id) => request(`/assignments/${id}`, { method: 'DELETE' }),
+  getSubmissions: (id) => request(`/assignments/${id}/submissions`),
+};
+
+// ─── AI API ───
+
+export const aiAPI = {
+  generateQuestions: (data) => request('/ai/generate-questions', { method: 'POST', body: data }),
 };

@@ -2,10 +2,15 @@ const mongoose = require('mongoose');
 
 const materialSchema = new mongoose.Schema(
   {
-    moduleId: {
+    classroomId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Module',
+      ref: 'Classroom',
       required: true,
+    },
+    topic: {
+      type: String,
+      required: [true, 'Material topic is required'],
+      trim: true,
     },
     title: {
       type: String,
@@ -19,17 +24,11 @@ const materialSchema = new mongoose.Schema(
     },
     url: {
       type: String,
-      // required if type is not text
-      required: function () {
-        return this.type !== 'text';
-      },
+      required: [true, 'File URL is required'],
     },
     content: {
       type: String,
-      // required if type is text
-      required: function () {
-        return this.type === 'text';
-      },
+      default: '',
     },
     description: {
       type: String,

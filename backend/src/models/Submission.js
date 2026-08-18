@@ -14,8 +14,12 @@ const submissionSchema = new mongoose.Schema(
     },
     fileUrl: {
       type: String,
-      required: true,
+      required: false, // Optional for MCQs
     },
+    answers: [{ // Array of selected option indices for MCQs
+      type: Number,
+      default: null
+    }],
     comment: {
       type: String,
       default: '',

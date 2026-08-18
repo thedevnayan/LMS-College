@@ -19,6 +19,7 @@ const quizRoutes = require('./routes/quizRoutes');
 const quizAttemptRoutes = require('./routes/quizAttemptRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const classroomRoutes = require('./routes/classroomRoutes');
+const aiRoutes = require('./routes/aiRoutes');
 
 const app = express();
 
@@ -63,9 +64,9 @@ app.use('/api/courses', courseRoutes);
 app.use('/api/courses/:courseId/modules', moduleRoutes); 
 app.use('/api/courses/:courseId/batches', batchRoutes);
 app.use('/api/modules', moduleRoutes); 
-app.use('/api/modules/:moduleId/materials', materialRoutes); 
-app.use('/api/modules/:moduleId/assignments', assignmentRoutes); 
+app.use('/api/classrooms/:classroomId/materials', materialRoutes); 
 app.use('/api/modules/:moduleId/quizzes', quizRoutes); 
+app.use('/api/classrooms/:classroomId/assignments', assignmentRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/batches', batchRoutes);
 app.use('/api/assignments', assignmentRoutes);
@@ -76,6 +77,7 @@ app.use('/api/quizzes/:quizId/attempts', quizAttemptRoutes);
 app.use('/api/quiz-attempts', quizAttemptRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/classrooms', classroomRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Health Check Route
 app.get('/api/health', (req, res) => {

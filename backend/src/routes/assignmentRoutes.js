@@ -9,7 +9,12 @@ const router = express.Router({ mergeParams: true });
 router.use(protect);
 
 router.route('/')
-  .get(assignmentController.getAssignments)
+  .get((req, res, next) => {
+    if (req.params.classroomId) {
+      return assignmentController.getAssignments(req, res, next);
+    }
+    return assignmentController.getAllAssignmentsForProfessor(req, res, next);
+  })
   .post(
     authorize('professor'),
     validate([

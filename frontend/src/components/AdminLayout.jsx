@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import {
-  LayoutDashboard, BookOpen, Plus, LogOut, Menu, X, ChevronRight, GraduationCap
+  LayoutDashboard, BookOpen, Plus, LogOut, Menu, X, ChevronRight, GraduationCap, FileText
 } from 'lucide-react';
 
 export default function AdminLayout() {
@@ -19,6 +19,8 @@ export default function AdminLayout() {
   const navItems = [
     { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/admin/classrooms/new', icon: Plus, label: 'Create Class' },
+    { to: '/admin/assignments', icon: BookOpen, label: 'Assignments' },
+    { to: '/admin/materials', icon: FileText, label: 'Materials' },
   ];
 
   return (

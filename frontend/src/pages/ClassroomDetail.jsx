@@ -160,8 +160,8 @@ export default function ClassroomDetail() {
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <span className="admin-badge" style={{
               backgroundColor: classroom.type === 'lab'
-                ? 'rgba(255,77,213,0.12)' : 'rgba(255,222,59,0.12)',
-              color: classroom.type === 'lab' ? '#ff4dd5' : '#ffde3b',
+                ? 'rgba(255,77,213,0.15)' : 'rgba(255,222,59,0.25)',
+              color: 'var(--color-ink)',
             }}>
               {classroom.type === 'lab' ? '🔬 Lab' : '📖 Theory'}
             </span>
@@ -169,15 +169,15 @@ export default function ClassroomDetail() {
             <span className="admin-badge">{classroom.session}</span>
             {classroom.type === 'lab' && classroom.labBatch && (
               <span className="admin-badge" style={{
-                backgroundColor: 'rgba(255,77,213,0.12)',
-                color: '#ff4dd5',
+                backgroundColor: 'rgba(255,77,213,0.15)',
+                color: 'var(--color-ink)',
               }}>
                 Sub-batch {classroom.labBatch}
               </span>
             )}
             <span className="admin-badge" style={{
-              backgroundColor: 'rgba(193,243,43,0.12)',
-              color: '#c1f32b',
+              backgroundColor: 'rgba(193,243,43,0.25)',
+              color: 'var(--color-ink)',
             }}>
               <Users size={12} style={{ marginRight: '4px' }} />
               {classroom.studentCount || 0} Students
@@ -193,9 +193,9 @@ export default function ClassroomDetail() {
             gap: '6px',
             padding: '8px 14px',
             borderRadius: '8px',
-            border: '1px solid rgba(255,107,107,0.2)',
-            backgroundColor: 'rgba(255,107,107,0.06)',
-            color: '#ff6b6b',
+            border: '1px solid rgba(211,47,47,0.3)',
+            backgroundColor: 'rgba(211,47,47,0.08)',
+            color: '#d32f2f',
             cursor: 'pointer',
             fontSize: '13px',
           }}
