@@ -21,6 +21,18 @@ router.route('/')
     res.status(400).json({ success: false, message: 'Classroom ID required to create test' });
   });
 
+router.route('/join/:code')
+  .get(testController.verifyJoinCode);
+
+router.route('/:id/join-code')
+  .patch(testController.generateJoinCode);
+
+router.route('/:id/live-state')
+  .get(testController.getLiveState);
+
+router.route('/:id/my-attempt')
+  .get(testController.getMyAttempt);
+
 router.route('/:id')
   .get(testController.getTestById)
   .patch(testController.updateTest)

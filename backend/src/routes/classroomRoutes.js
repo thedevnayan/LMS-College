@@ -25,9 +25,9 @@ router.use(protect); // All routes require authentication
 // Student join route (must be before /:id routes)
 router.post('/join', authorize('student'), validate(joinValidation), classroomController.joinClassroom);
 
-// Professor routes
+// Professor and Student routes
 router.route('/')
-  .get(authorize('professor'), classroomController.getClassrooms)
+  .get(classroomController.getClassrooms)
   .post(authorize('professor'), validate(createClassroomValidation), classroomController.createClassroom);
 
 router.route('/:id')

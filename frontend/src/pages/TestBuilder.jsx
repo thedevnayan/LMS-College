@@ -97,7 +97,7 @@ export default function TestBuilder() {
       points: 1,
       options: type === 'mcq' ? ['', '', '', ''] : [],
       correctOptionIndex: type === 'mcq' ? 0 : null,
-      codingLanguage: type === 'coding' ? 'javascript' : '',
+      codingLanguage: 'javascript',
       codingTemplate: '',
       testCases: type === 'coding' ? [{ input: '', expectedOutput: '', isHidden: false }] : []
     };
@@ -124,7 +124,7 @@ export default function TestBuilder() {
           points: 1,
           options: generated.options || (aiType === 'mcq' ? ['', '', '', ''] : []),
           correctOptionIndex: generated.correctOptionIndex !== undefined ? generated.correctOptionIndex : (aiType === 'mcq' ? 0 : null),
-          codingLanguage: generated.codingLanguage || (aiType === 'coding' ? 'javascript' : ''),
+          codingLanguage: generated.codingLanguage || 'javascript',
           codingTemplate: generated.codingTemplate || '',
           testCases: generated.testCases || (aiType === 'coding' ? [{ input: '', expectedOutput: '', isHidden: false }] : [])
         };
@@ -305,19 +305,31 @@ export default function TestBuilder() {
                       <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
                         <div style={{ flex: 1 }}>
                           <label className="admin-label">Language</label>
-                          <select
+                          <input
+                            type="text"
+                            list={`language-options-${index}`}
                             className="admin-input"
                             value={q.codingLanguage}
                             onChange={(e) => handleUpdateQuestion(index, 'codingLanguage', e.target.value)}
-                            style={{ width: '100%' }}
-                          >
-                            <option value="javascript">JavaScript</option>
-                            <option value="python">Python 3</option>
-                            <option value="c">C</option>
-                            <option value="cpp">C++</option>
-                            <option value="java">Java</option>
-                            <option value="assembly">Assembly</option>
-                          </select>
+                            placeholder="e.g. JavaScript, Rust, Go, Python"
+                            style={{ width: '100%', boxSizing: 'border-box' }}
+                          />
+                          <datalist id={`language-options-${index}`}>
+                            <option value="javascript" />
+                            <option value="python" />
+                            <option value="c" />
+                            <option value="cpp" />
+                            <option value="java" />
+                            <option value="assembly" />
+                            <option value="ruby" />
+                            <option value="rust" />
+                            <option value="go" />
+                            <option value="typescript" />
+                            <option value="php" />
+                            <option value="swift" />
+                            <option value="kotlin" />
+                            <option value="csharp" />
+                          </datalist>
                         </div>
                       </div>
                       

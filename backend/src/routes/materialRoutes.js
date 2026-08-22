@@ -22,7 +22,7 @@ router.route('/')
     validate([
       body('title').trim().notEmpty().withMessage('Title is required'),
       body('topic').trim().notEmpty().withMessage('Topic is required'),
-      body('type').isIn(['pdf', 'video', 'text', 'link', 'presentation']).withMessage('Valid material type is required'),
+      body('type').isIn(['pdf', 'video', 'text', 'link', 'presentation', 'image']).withMessage('Valid material type is required'),
     ]),
     materialController.createMaterial
   );

@@ -122,10 +122,17 @@ export default function AssignmentBuilder() {
         count: aiCount,
         difficulty: aiDifficulty,
       });
-      if (res.success && res.data) {
+      if (res.success && Array.isArray(res.data)) {
+        const safeQuestions = res.data.map(q => ({
+          text: q.text || '',
+          options: Array.isArray(q.options) ? [...q.options, '', '', '', ''].slice(0, 4) : ['', '', '', ''],
+          correctOptionIndex: typeof q.correctOptionIndex === 'number' ? q.correctOptionIndex : 0,
+          marks: q.marks || 1
+        }));
+        
         setFormData((prev) => ({
           ...prev,
-          questions: [...prev.questions, ...res.data],
+          questions: [...prev.questions, ...safeQuestions],
         }));
         setShowAiModal(false);
         setAiTopic('');

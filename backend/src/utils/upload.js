@@ -14,11 +14,15 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
+    const ext = file.originalname.split('.').pop();
+    const isImage = file.mimetype.startsWith('image/');
+    const baseName = file.originalname.substring(0, file.originalname.lastIndexOf('.')) || file.originalname;
+    
     return {
       folder: 'lms_materials',
       resource_type: 'auto', // Automatically detects image, raw (pdf, docx, pptx) or video
       format: undefined, // Let cloudinary keep original format
-      public_id: `${Date.now()}-${file.originalname.split('.')[0]}`
+      public_id: isImage ? `${Date.now()}-${baseName}` : `${Date.now()}-${baseName}.${ext}`
     };
   },
 });

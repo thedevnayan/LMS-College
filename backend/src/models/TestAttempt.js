@@ -50,7 +50,7 @@ const testAttemptSchema = new mongoose.Schema(
   }
 );
 
-// A student can attempt a test multiple times? Let's say yes for now, but usually it's once.
-// testAttemptSchema.index({ testId: 1, studentId: 1 }, { unique: true });
+// One attempt per student per test
+testAttemptSchema.index({ testId: 1, studentId: 1 }, { unique: true });
 
 module.exports = mongoose.model('TestAttempt', testAttemptSchema);

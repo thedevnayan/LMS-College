@@ -21,10 +21,12 @@ export const removeToken = () => localStorage.removeItem('accessToken');
 async function request(endpoint, options = {}) {
   const { body, method = 'GET', headers = {} } = options;
 
+  const isFormData = body instanceof FormData;
+
   const config = {
     method,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...headers,
     },
     credentials: 'include', // for httpOnly cookies (refresh token)
@@ -36,7 +38,7 @@ async function request(endpoint, options = {}) {
   }
 
   if (body) {
-    config.body = JSON.stringify(body);
+    config.body = isFormData ? body : JSON.stringify(body);
   }
 
   let res = await fetch(`${API_BASE}${endpoint}`, config);
@@ -57,9 +59,9 @@ async function request(endpoint, options = {}) {
         res = await fetch(`${API_BASE}${endpoint}`, config);
       }
     } else {
-      // Refresh failed — clear token and redirect to login
+      // Refresh failed — clear token and redirect to student login
       removeToken();
-      window.location.href = '/admin/login';
+      window.location.href = '/login';
       throw new Error('Session expired');
     }
   }
@@ -128,6 +130,10 @@ export const testsAPI = {
   getById: (id) => request(`/tests/${id}`),
   update: (id, data) => request(`/tests/${id}`, { method: 'PATCH', body: data }),
   delete: (id) => request(`/tests/${id}`, { method: 'DELETE' }),
+  generateJoinCode: (id) => request(`/tests/${id}/join-code`, { method: 'PATCH' }),
+  verifyJoinCode: (code) => request(`/tests/join/${code}`),
+  getLiveState: (id) => request(`/tests/${id}/live-state`),
+  getMyAttempt: (id) => request(`/tests/${id}/my-attempt`),
 };
 
 // ─── AI API ───
@@ -175,6 +181,12 @@ export const assignmentsAPI = {
   update: (id, data) => request(`/assignments/${id}`, { method: 'PUT', body: data }),
   delete: (id) => request(`/assignments/${id}`, { method: 'DELETE' }),
   getSubmissions: (id) => request(`/assignments/${id}/submissions`),
+  submit: (id, data) => request(`/assignments/${id}/submit`, { method: 'POST', body: data }),
 };
 
+// ─── Students API (Admin) ───
 
+export const studentsAPI = {
+  getAll: () => request('/students'),
+  getProfile: (id) => request(`/students/${id}/performance`),
+};

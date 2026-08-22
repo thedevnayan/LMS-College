@@ -21,6 +21,7 @@ const quizAttemptRoutes = require('./routes/quizAttemptRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const classroomRoutes = require('./routes/classroomRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const studentRoutes = require('./routes/studentRoutes');
 
 const app = express();
 
@@ -81,6 +82,7 @@ app.use('/api/quiz-attempts', quizAttemptRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/classrooms', classroomRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/students', studentRoutes);
 
 // Health Check Route
 app.get('/api/health', (req, res) => {

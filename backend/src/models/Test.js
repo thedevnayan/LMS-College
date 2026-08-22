@@ -27,7 +27,6 @@ const questionSchema = new mongoose.Schema({
   // For Coding
   codingLanguage: { 
     type: String, 
-    enum: ['javascript', 'python', 'c', 'cpp', 'java', 'assembly'],
     default: 'javascript'
   },
   codingTemplate: { type: String, default: '' },
@@ -60,10 +59,30 @@ const testSchema = new mongoose.Schema(
       enum: ['draft', 'published', 'active', 'completed'],
       default: 'draft',
     },
+    joinCode: {
+      type: String,
+      sparse: true,
+      unique: true
+    },
+    liveStatus: {
+      type: String,
+      enum: ['waiting', 'in-progress', 'ended'],
+      default: 'waiting'
+    },
     // In minutes. Applies if testType is 'time-based'
     timeLimit: {
       type: Number,
       default: 0, 
+    },
+    // Server-side live test state (survives disconnections)
+    currentQuestionIndex: {
+      type: Number,
+      default: 0,
+    },
+    turnUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
     questions: [questionSchema],
   },

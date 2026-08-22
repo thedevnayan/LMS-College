@@ -38,6 +38,18 @@ export default function TestsList() {
     }
   };
 
+  const handleHostLive = async (test, e) => {
+    e.stopPropagation();
+    try {
+      if (!test.joinCode) {
+        await testsAPI.generateJoinCode(test._id);
+      }
+      navigate(`/admin/live-test/${test._id}/dashboard`);
+    } catch (err) {
+      console.error('Failed to host live test:', err);
+    }
+  };
+
   const getTypeIcon = (type) => {
     switch (type) {
       case 'time-based': return <Clock size={18} />;
@@ -139,7 +151,16 @@ export default function TestsList() {
                 </div>
               </div>
               
-              <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                {test.testType !== 'standard' && (
+                  <button
+                    onClick={(e) => handleHostLive(test, e)}
+                    className="admin-btn-primary"
+                    style={{ padding: '8px 16px', fontSize: '13px' }}
+                  >
+                    Host Live
+                  </button>
+                )}
                 <button
                   onClick={(e) => handleDelete(test._id, e)}
                   style={{ padding: '8px 12px', borderRadius: '8px', border: '2px solid var(--color-fog)', backgroundColor: 'transparent', color: 'var(--color-fog)', cursor: 'pointer' }}

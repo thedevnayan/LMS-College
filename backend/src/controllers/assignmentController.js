@@ -55,6 +55,7 @@ const getAssignments = asyncHandler(async (req, res, next) => {
       ...a,
       submissionStatus: submissionMap[a._id] ? submissionMap[a._id].status : 'unsubmitted',
       score: submissionMap[a._id] ? submissionMap[a._id].marks : null,
+      submittedAt: submissionMap[a._id] ? submissionMap[a._id].submittedAt : null,
     }));
   }
 
@@ -191,23 +192,96 @@ const deleteAssignment = asyncHandler(async (req, res, next) => {
  * @access  Professor (Owner only)
  */
 const getAssignmentSubmissions = asyncHandler(async (req, res, next) => {
+  const { paginate } = require('../utils/pagination');
+  const { paginatedResponse } = require('../utils/response');
+  const Classroom = require('../models/Classroom');
   const assignment = await Assignment.findById(req.params.id);
-  if (!assignment) return next(new ApiError(404, 'NOT_FOUND', 'Assignment not found'));
 
-  await getAccessDetails(assignment.classroomId, req.user);
+  if (!assignment) {
+    return next(new ApiError(404, 'NOT_FOUND', 'Assignment not found'));
+  }
 
-  const submissions = await Submission.find({ assignmentId: assignment._id })
-    .populate('studentId', 'name email avatarUrl');
+  // Authorize professor (must own the course/classroom)
+  // Check if professor owns the classroom
+  const classroom = await Classroom.findById(assignment.classroomId);
+  if (!classroom || classroom.professorId.toString() !== req.user._id.toString()) {
+    return next(new ApiError(403, 'FORBIDDEN', 'Not authorized'));
+  }
 
-  res.status(200).json(successResponse(submissions));
+  const result = await paginate(
+    Submission,
+    { assignmentId: assignment._id },
+    req.query,
+    { populate: { path: 'studentId', select: 'name email avatarUrl' } }
+  );
+
+  res.status(200).json(paginatedResponse(result.data, result.meta));
+});
+
+/**
+ * @route   POST /api/assignments/:id/submit
+ * @access  Student
+ * @desc    Submit an assignment
+ */
+const submitAssignment = asyncHandler(async (req, res, next) => {
+  const assignment = await Assignment.findById(req.params.id);
+  if (!assignment) {
+    return next(new ApiError(404, 'NOT_FOUND', 'Assignment not found'));
+  }
+
+  const { comment, fileUrl, answers } = req.body;
+
+  // Check if already submitted
+  const existing = await Submission.findOne({
+    assignmentId: assignment._id,
+    studentId: req.user._id,
+  });
+
+  if (existing) {
+    return next(new ApiError(409, 'ALREADY_SUBMITTED', 'You have already submitted this assignment'));
+  }
+
+  const isLate = new Date() > new Date(assignment.dueDate);
+
+  let marks = null;
+  let status = 'pending';
+
+  if (assignment.questions && assignment.questions.length > 0 && answers) {
+    let score = 0;
+    const maxMarks = assignment.maxMarks || 100;
+    const marksPerQuestion = maxMarks / assignment.questions.length;
+    
+    assignment.questions.forEach((q, index) => {
+      if (answers[index] === q.correctOptionIndex) {
+        score += marksPerQuestion;
+      }
+    });
+    marks = Math.round(score); // Round to nearest integer
+    status = 'graded';
+  }
+
+  const submission = await Submission.create({
+    assignmentId: assignment._id,
+    studentId: req.user._id,
+    comment,
+    fileUrl,
+    answers,
+    isLate,
+    marks,
+    status,
+    gradedAt: status === 'graded' ? new Date() : null,
+  });
+
+  res.status(201).json(successResponse(submission, 'Assignment submitted successfully'));
 });
 
 module.exports = {
+  createAssignment,
   getAssignments,
   getAllAssignmentsForProfessor,
-  createAssignment,
   getAssignmentById,
   updateAssignment,
   deleteAssignment,
   getAssignmentSubmissions,
+  submitAssignment,
 };

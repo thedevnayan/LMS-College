@@ -71,7 +71,17 @@ const createClassroom = asyncHandler(async (req, res, next) => {
  * @desc    List all classrooms owned by this professor
  */
 const getClassrooms = asyncHandler(async (req, res, next) => {
-  const filter = { professorId: req.user._id };
+  let filter = {};
+
+  if (req.user.role === 'student') {
+    // For students, find all classrooms they are enrolled in
+    const enrollments = await Enrollment.find({ studentId: req.user._id, deletedAt: null });
+    const classroomIds = enrollments.map(e => e.classroomId);
+    filter = { _id: { $in: classroomIds } };
+  } else {
+    // For professors, find all classrooms they created
+    filter = { professorId: req.user._id };
+  }
 
   // Optional filters
   if (req.query.session) {
@@ -97,6 +107,18 @@ const getClassrooms = asyncHandler(async (req, res, next) => {
         classroomId: classroom._id,
         deletedAt: null,
       });
+
+      if (req.user.role === 'student') {
+        const myEnrollment = await Enrollment.findOne({
+          classroomId: classroom._id,
+          studentId: req.user._id,
+          deletedAt: null,
+        });
+        if (myEnrollment && myEnrollment.labBatch) {
+          obj.labBatch = myEnrollment.labBatch;
+        }
+      }
+
       return obj;
     })
   );

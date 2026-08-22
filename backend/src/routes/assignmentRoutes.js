@@ -31,5 +31,6 @@ router.route('/:id')
   .delete(authorize('professor'), assignmentController.deleteAssignment);
 
 router.get('/:id/submissions', authorize('professor'), assignmentController.getAssignmentSubmissions);
+router.post('/:id/submit', authorize('student'), assignmentController.submitAssignment);
 
 module.exports = router;

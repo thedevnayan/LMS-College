@@ -58,7 +58,27 @@ Example output format:
       cleanedText = cleanedText.replace(/```$/, '');
     }
 
-    const questions = JSON.parse(cleanedText.trim());
+    let parsedJson = JSON.parse(cleanedText.trim());
+    
+    // Ensure we have an array of questions, even if Gemini wraps it in an object like { questions: [...] }
+    let questions = [];
+    if (Array.isArray(parsedJson)) {
+      questions = parsedJson;
+    } else if (parsedJson.questions && Array.isArray(parsedJson.questions)) {
+      questions = parsedJson.questions;
+    } else {
+      // Fallback: search values for an array
+      for (const key in parsedJson) {
+        if (Array.isArray(parsedJson[key])) {
+          questions = parsedJson[key];
+          break;
+        }
+      }
+    }
+
+    if (!Array.isArray(questions) || questions.length === 0) {
+      throw new Error('Could not parse a valid array of questions from the AI response.');
+    }
 
     res.status(200).json(successResponse(questions, 'Questions generated successfully'));
   } catch (err) {
