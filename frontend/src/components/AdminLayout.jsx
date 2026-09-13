@@ -1,23 +1,33 @@
-import React, { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../context/AuthContext';
-import {
-  LayoutDashboard, BookOpen, Plus, LogOut, Menu, X, ChevronRight, GraduationCap, FileText, Zap, Users
-} from 'lucide-react';
+'use client';
 
-export default function AdminLayout() {
+import React, { useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/context/AuthContext';
+import {
+  LayoutDashboard, BookOpen, Plus, LogOut, Menu, X, ChevronRight, GraduationCap, FileText, Zap, Users,
+  BarChart3, Layers, RefreshCw, Calendar, Sparkles
+} from 'lucide-react';
+import { useAcademic } from '@/context/AcademicContext';
+
+export default function AdminLayout({ children }) {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { sessions, activeSession, switchSession } = useAcademic();
+  const router = useRouter();
+  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const handleLogout = async () => {
     await logout();
-    navigate('/admin/login');
+    router.push('/admin/login');
   };
 
   const navItems = [
     { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/admin/mis', icon: BarChart3, label: 'College MIS' },
+    { to: '/admin/academic', icon: Layers, label: 'Academic Setup' },
+    { to: '/admin/rollover', icon: RefreshCw, label: 'Session Rollover' },
     { to: '/admin/classrooms/new', icon: Plus, label: 'Create Class' },
     { to: '/admin/assignments', icon: BookOpen, label: 'Assignments' },
     { to: '/admin/materials', icon: FileText, label: 'Materials' },
@@ -88,39 +98,42 @@ export default function AdminLayout() {
 
         {/* Navigation */}
         <nav style={{ flex: 1, padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              style={({ isActive }) => ({
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: sidebarOpen ? '12px 14px' : '12px',
-                borderRadius: '10px',
-                textDecoration: 'none',
-                color: isActive ? 'var(--color-ink)' : 'var(--color-fog)',
-                backgroundColor: isActive ? 'rgba(0,0,0,0.05)' : 'transparent',
-                transition: 'all 200ms ease',
-                justifyContent: sidebarOpen ? 'flex-start' : 'center',
-              })}
-            >
-              <item.icon size={20} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-              <AnimatePresence>
-                {sidebarOpen && (
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    style={{ fontSize: 'var(--text-body)', whiteSpace: 'nowrap' }}
-                  >
-                    {item.label}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </NavLink>
-          ))}
+          {navItems.map((item) => {
+            const isActive = pathname === item.to || pathname.startsWith(item.to + '/');
+            return (
+              <Link
+                key={item.to}
+                href={item.to}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: sidebarOpen ? '12px 14px' : '12px',
+                  borderRadius: '10px',
+                  textDecoration: 'none',
+                  color: isActive ? 'var(--color-ink)' : 'var(--color-fog)',
+                  backgroundColor: isActive ? 'rgba(0,0,0,0.05)' : 'transparent',
+                  transition: 'all 200ms ease',
+                  justifyContent: sidebarOpen ? 'flex-start' : 'center',
+                }}
+              >
+                <item.icon size={20} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <AnimatePresence>
+                  {sidebarOpen && (
+                    <motion.span
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      style={{ fontSize: 'var(--text-body)', whiteSpace: 'nowrap' }}
+                    >
+                      {item.label}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Bottom section */}
@@ -214,9 +227,81 @@ export default function AdminLayout() {
           marginLeft: sidebarOpen ? '260px' : '72px',
           transition: 'margin-left 300ms cubic-bezier(0.23, 1, 0.32, 1)',
           minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        <Outlet />
+        {/* Top Header Bar with Academic Session Selector */}
+        <header style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '14px 32px',
+          backgroundColor: 'var(--color-paper-white)',
+          borderBottom: '1px solid var(--color-ink)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 90,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Calendar size={18} color="var(--color-ink)" />
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-ink)' }}>Academic Session:</span>
+            <select
+              value={activeSession?._id || ''}
+              onChange={(e) => switchSession(e.target.value)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: '1px solid var(--color-ink)',
+                backgroundColor: 'var(--color-warm-linen)',
+                fontWeight: 600,
+                fontSize: '13px',
+                color: 'var(--color-ink)',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              {sessions.map(s => (
+                <option key={s._id} value={s._id}>
+                  {s.name} ({s.status}){s.isCurrent ? ' • Current' : ''}
+                </option>
+              ))}
+            </select>
+            {activeSession?.status && (
+              <span style={{
+                padding: '3px 8px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                border: '1px solid var(--color-ink)',
+                backgroundColor: activeSession.status === 'Active' ? 'var(--color-electric-lime)' : 'var(--color-fog-light, #e0e0e0)',
+                color: 'var(--color-ink)',
+              }}>
+                {activeSession.status}
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <span style={{
+              fontSize: '12px',
+              fontWeight: 600,
+              padding: '4px 10px',
+              borderRadius: '6px',
+              backgroundColor: user?.role === 'admin' ? 'var(--color-sun-yellow)' : 'var(--color-periwinkle)',
+              border: '1px solid var(--color-ink)',
+              color: 'var(--color-ink)',
+              textTransform: 'uppercase',
+            }}>
+              {user?.role === 'admin' ? 'College Administrator' : 'Faculty Member'}
+            </span>
+          </div>
+        </header>
+
+        <div style={{ flex: 1 }}>
+          {children}
+        </div>
       </main>
     </div>
   );

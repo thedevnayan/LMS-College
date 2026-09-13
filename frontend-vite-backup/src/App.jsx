@@ -15,6 +15,7 @@ import MaterialsList from './pages/MaterialsList';
 import MaterialBuilder from './pages/MaterialBuilder';
 import TestsList from './pages/TestsList';
 import TestBuilder from './pages/TestBuilder';
+import TestReport from './pages/TestReport';
 import AdminStudentsList from './pages/AdminStudentsList';
 import AdminStudentProfile from './pages/AdminStudentProfile';
 
@@ -83,6 +84,7 @@ function App() {
             <Route path="tests" element={<TestsList />} />
             <Route path="tests/new" element={<TestBuilder />} />
             <Route path="tests/:id/edit" element={<TestBuilder />} />
+            <Route path="tests/:id/report" element={<TestReport />} />
             <Route path="live-test/:testId/dashboard" element={<LiveTestDashboard />} />
             <Route path="students" element={<AdminStudentsList />} />
             <Route path="students/:id" element={<AdminStudentProfile />} />

@@ -26,7 +26,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['professor', 'student'],
+      enum: ['admin', 'professor', 'teacher', 'student'],
       required: [true, 'Role is required'],
     },
     avatarUrl: {

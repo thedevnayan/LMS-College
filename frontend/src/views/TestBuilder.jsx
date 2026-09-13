@@ -1,13 +1,15 @@
+'use client';
+
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { classroomsAPI, testsAPI, aiAPI } from '../services/api';
+import { useRouter, useParams } from 'next/navigation';
+import { classroomsAPI, testsAPI, aiAPI } from '@/services/api';
 import { ArrowLeft, Save, Plus, Trash2, Clock, CheckCircle, Sparkles, X, Loader } from 'lucide-react';
-import CustomSelect from '../components/CustomSelect';
+import CustomSelect from '@/components/CustomSelect';
 
 export default function TestBuilder() {
   const { id } = useParams();
   const isEditing = Boolean(id);
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const [classrooms, setClassrooms] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -24,19 +26,41 @@ export default function TestBuilder() {
   });
 
   const [aiModalOpen, setAiModalOpen] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
   const [aiType, setAiType] = useState('mcq');
+  const [aiTopic, setAiTopic] = useState('');
+  const [aiCount, setAiCount] = useState(5);
+  const [aiDifficulty, setAiDifficulty] = useState('medium');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
 
   const questionsEndRef = useRef(null);
 
+  const [draftRestored, setDraftRestored] = useState(false);
+
   useEffect(() => {
     fetchClassrooms();
     if (isEditing) {
       fetchTest();
+    } else {
+      // Check for draft
+      const savedDraft = localStorage.getItem('lms_test_builder_draft');
+      if (savedDraft) {
+        try {
+          const parsed = JSON.parse(savedDraft);
+          setFormData(parsed);
+          setDraftRestored(true);
+        } catch (e) {
+          console.error('Failed to parse draft', e);
+        }
+      }
     }
   }, [id]);
+
+  useEffect(() => {
+    if (!isEditing && formData.title !== undefined) {
+      localStorage.setItem('lms_test_builder_draft', JSON.stringify(formData));
+    }
+  }, [formData, isEditing]);
 
   const fetchClassrooms = async () => {
     try {
@@ -110,33 +134,58 @@ export default function TestBuilder() {
   };
 
   const handleGenerateAI = async () => {
-    if (!aiPrompt.trim()) return setAiError('Prompt cannot be empty');
+    if (!aiTopic.trim()) return setAiError('Prompt/Topic cannot be empty');
     setAiLoading(true);
     setAiError('');
     try {
-      const res = await aiAPI.generateQuestion({ prompt: aiPrompt, type: aiType });
-      if (res.success && res.data) {
-        const generated = res.data;
-        const newQ = {
-          id: Date.now().toString(),
-          questionType: aiType,
-          text: generated.text || '',
-          points: 1,
-          options: generated.options || (aiType === 'mcq' ? ['', '', '', ''] : []),
-          correctOptionIndex: generated.correctOptionIndex !== undefined ? generated.correctOptionIndex : (aiType === 'mcq' ? 0 : null),
-          codingLanguage: generated.codingLanguage || 'javascript',
-          codingTemplate: generated.codingTemplate || '',
-          testCases: generated.testCases || (aiType === 'coding' ? [{ input: '', expectedOutput: '', isHidden: false }] : [])
-        };
-        setFormData(prev => ({ ...prev, questions: [...prev.questions, newQ] }));
-        setAiModalOpen(false);
-        setAiPrompt('');
-        setTimeout(() => {
-          questionsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
+      if (aiType === 'coding') {
+        const res = await aiAPI.generateQuestion({ prompt: aiTopic, type: 'coding' });
+        if (res.success && res.data) {
+          const generated = res.data;
+          const newQ = {
+            id: Date.now().toString(),
+            questionType: 'coding',
+            text: generated.text || generated.question || generated.problem || '',
+            points: generated.marks || generated.points || 5,
+            options: [],
+            correctOptionIndex: null,
+            codingLanguage: generated.codingLanguage || generated.language || 'javascript',
+            codingTemplate: generated.codingTemplate || generated.template || '',
+            testCases: generated.testCases || generated.testcases || [{ input: '1', expectedOutput: '1', isHidden: false }]
+          };
+          setFormData(prev => ({ ...prev, questions: [...prev.questions, newQ] }));
+          setAiModalOpen(false);
+          setAiTopic('');
+          setTimeout(() => questionsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        }
+      } else {
+        const res = await aiAPI.generateQuestions({ 
+          topic: aiTopic, 
+          count: parseInt(aiCount, 10), 
+          difficulty: aiDifficulty 
+        });
+        if (res.success && Array.isArray(res.data)) {
+          const generatedQs = res.data.map((generated, idx) => ({
+            id: Date.now().toString() + idx,
+            questionType: 'mcq',
+            text: generated.text || generated.question || '',
+            points: generated.marks || generated.points || 1,
+            options: generated.options || ['', '', '', ''],
+            correctOptionIndex: generated.correctOptionIndex !== undefined ? generated.correctOptionIndex : (generated.correctOption !== undefined ? generated.correctOption : 0),
+            codingLanguage: 'javascript',
+            codingTemplate: '',
+            testCases: []
+          }));
+          
+          setFormData(prev => ({ ...prev, questions: [...prev.questions, ...generatedQs] }));
+          setAiModalOpen(false);
+          setAiTopic('');
+          setAiCount(5);
+          setTimeout(() => questionsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        }
       }
     } catch (err) {
-      setAiError(err.response?.data?.message || 'Failed to generate question');
+      setAiError(err.response?.data?.message || 'Failed to generate question(s)');
     } finally {
       setAiLoading(false);
     }
@@ -189,8 +238,9 @@ export default function TestBuilder() {
         await testsAPI.update(id, formData);
       } else {
         await testsAPI.create(formData.classroomId, formData);
+        localStorage.removeItem('lms_test_builder_draft');
       }
-      navigate('/admin/tests');
+      router.push('/admin/tests');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save test');
     } finally {
@@ -201,7 +251,7 @@ export default function TestBuilder() {
   return (
     <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px', paddingBottom: '120px' }}>
       <button
-        onClick={() => navigate('/admin/tests')}
+        onClick={() => router.push('/admin/tests')}
         style={{ display: 'flex', alignItems: 'center', gap: '8px', border: 'none', background: 'none', color: 'var(--color-fog)', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginBottom: '24px' }}
       >
         <ArrowLeft size={16} /> Back to Tests
@@ -217,6 +267,15 @@ export default function TestBuilder() {
           </p>
         </div>
       </div>
+
+      {draftRestored && (
+        <div style={{ padding: '12px 16px', backgroundColor: '#e0f2fe', color: '#0369a1', borderRadius: '8px', marginBottom: '24px', fontWeight: 500, border: '2px solid #0284c7', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>A previous unsaved draft was automatically restored.</span>
+          <button onClick={() => setDraftRestored(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0284c7' }}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {error && (
         <div style={{ padding: '12px 16px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '24px', fontWeight: 500, border: '2px solid #991b1b' }}>
@@ -491,17 +550,26 @@ export default function TestBuilder() {
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
         }}>
           <div style={{
-            backgroundColor: 'var(--color-paper-white)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '500px',
+            backgroundColor: '#fcfbf9', padding: '32px', borderRadius: '16px', width: '100%', maxWidth: '420px',
             border: '2px solid var(--color-ink)', boxShadow: '8px 8px 0px var(--color-ink)', position: 'relative'
           }}>
-            <button onClick={() => setAiModalOpen(false)} style={{ position: 'absolute', top: '24px', right: '24px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-fog)' }}>
+            <button onClick={() => setAiModalOpen(false)} style={{ position: 'absolute', top: '24px', right: '24px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-ink)' }}>
               <X size={24} />
             </button>
             
-            <h2 style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '24px', color: 'var(--color-ink)', marginBottom: '8px' }}>
-              <Sparkles size={24} color="#f59e0b" /> AI Generator
-            </h2>
-            <p style={{ color: 'var(--color-fog)', fontSize: '15px', marginBottom: '24px' }}>Describe the question you want, and Gemini will build it.</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{
+                background: 'linear-gradient(135deg, #fba866, #f3589b)', width: '36px', height: '36px',
+                borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                <Sparkles size={20} color="var(--color-ink)" />
+              </div>
+              <h2 style={{ fontSize: '20px', color: 'var(--color-ink)', fontWeight: 600, margin: 0 }}>
+                AI Generator
+              </h2>
+            </div>
+            
+            <div style={{ width: '100%', height: '2px', backgroundColor: '#e5e7eb', marginBottom: '24px' }} />
 
             {aiError && (
               <div style={{ padding: '12px 16px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '14px', fontWeight: 500 }}>
@@ -509,37 +577,81 @@ export default function TestBuilder() {
               </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div>
-                <label className="admin-label">Question Type</label>
-                <select className="admin-input" value={aiType} onChange={(e) => setAiType(e.target.value)} style={{ width: '100%' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--color-ink)', textTransform: 'uppercase', marginBottom: '8px' }}>
+                  Question Type
+                </label>
+                <select 
+                  className="admin-input" 
+                  value={aiType} 
+                  onChange={(e) => setAiType(e.target.value)} 
+                  style={{ width: '100%', backgroundColor: 'white', boxSizing: 'border-box' }}
+                >
                   <option value="mcq">Multiple Choice</option>
                   <option value="coding">Coding Problem (with Test Cases)</option>
                 </select>
               </div>
 
               <div>
-                <label className="admin-label">Prompt</label>
-                <textarea
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--color-ink)', textTransform: 'uppercase', marginBottom: '8px' }}>
+                  {aiType === 'coding' ? 'Prompt' : 'Topic'}
+                </label>
+                <input
+                  type="text"
                   className="admin-input"
-                  value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder="e.g., Create a medium difficulty Python problem to traverse a binary tree..."
-                  style={{ width: '100%', minHeight: '120px', boxSizing: 'border-box' }}
+                  value={aiTopic}
+                  onChange={(e) => setAiTopic(e.target.value)}
+                  placeholder={aiType === 'coding' ? "e.g. Create a medium difficulty Python problem..." : "e.g. Data Structures, Quantum Physics"}
+                  style={{ width: '100%', boxSizing: 'border-box', backgroundColor: 'white' }}
                 />
               </div>
+
+              {aiType === 'mcq' && (
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--color-ink)', textTransform: 'uppercase', marginBottom: '8px' }}>
+                      Count
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      className="admin-input"
+                      value={aiCount}
+                      onChange={(e) => setAiCount(e.target.value)}
+                      style={{ width: '100%', boxSizing: 'border-box', backgroundColor: 'white' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--color-ink)', textTransform: 'uppercase', marginBottom: '8px' }}>
+                      Difficulty
+                    </label>
+                    <select 
+                      className="admin-input" 
+                      value={aiDifficulty} 
+                      onChange={(e) => setAiDifficulty(e.target.value)} 
+                      style={{ width: '100%', backgroundColor: 'white', boxSizing: 'border-box' }}
+                    >
+                      <option value="easy">Easy</option>
+                      <option value="medium">Medium</option>
+                      <option value="hard">Hard</option>
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <button
                 onClick={handleGenerateAI}
                 disabled={aiLoading}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', borderRadius: '12px',
-                  backgroundColor: '#f59e0b', color: 'white', border: 'none', fontSize: '16px', fontWeight: 600, cursor: aiLoading ? 'not-allowed' : 'pointer',
-                  opacity: aiLoading ? 0.7 : 1, marginTop: '8px'
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', borderRadius: '8px',
+                  backgroundColor: '#4b4b4b', color: 'white', border: 'none', fontSize: '15px', fontWeight: 600, cursor: aiLoading ? 'not-allowed' : 'pointer',
+                  opacity: aiLoading ? 0.7 : 1, marginTop: '8px', width: '100%'
                 }}
               >
-                {aiLoading ? <Loader className="animate-spin" size={20} /> : <Sparkles size={20} />}
-                {aiLoading ? 'Generating...' : 'Generate with Gemini'}
+                {aiLoading ? <Loader className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                {aiLoading ? 'Generating...' : (aiType === 'coding' ? 'Generate Coding Question' : 'Generate MCQs')}
               </button>
             </div>
           </div>

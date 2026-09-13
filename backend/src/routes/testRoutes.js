@@ -33,6 +33,9 @@ router.route('/:id/live-state')
 router.route('/:id/my-attempt')
   .get(testController.getMyAttempt);
 
+router.route('/:id/report')
+  .get(testController.getTestReport);
+
 router.route('/:id')
   .get(testController.getTestById)
   .patch(testController.updateTest)

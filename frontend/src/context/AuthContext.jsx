@@ -1,5 +1,8 @@
+'use client';
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { authAPI, getToken, setToken, removeToken } from '../services/api';
+import { useRouter } from 'next/navigation';
+import { authAPI, getToken, setToken, removeToken } from '@/services/api';
 
 const AuthContext = createContext(null);
 

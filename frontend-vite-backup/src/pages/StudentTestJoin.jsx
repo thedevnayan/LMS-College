@@ -28,13 +28,35 @@ export default function StudentTestJoin() {
     fetchTest();
   }, [testId]);
 
-  const handleStartTest = () => {
+  const [showCodePrompt, setShowCodePrompt] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [joinError, setJoinError] = useState('');
+
+  const handleStartTest = async () => {
+    if (test.testType.startsWith('live')) {
+      setShowCodePrompt(true);
+      return;
+    }
+    // For standard/time-based, go straight in
+    navigate(`/live-test/${testId}`);
+  };
+
+  const handleVerifyCode = async () => {
+    if (!joinCode.trim()) return;
     setStarting(true);
-    // Placeholder for actual test start logic
-    setTimeout(() => {
-      alert("Test taking environment is currently under construction! Stay tuned.");
+    setJoinError('');
+    try {
+      const res = await testsAPI.verifyJoinCode(joinCode);
+      if (res.success && res.data.testId === testId) {
+        navigate(`/live-test/${testId}`);
+      } else {
+        setJoinError('Code does not match this test.');
+      }
+    } catch (err) {
+      setJoinError(err.message || 'Invalid join code');
+    } finally {
       setStarting(false);
-    }, 500);
+    }
   };
 
   if (loading) {
@@ -125,6 +147,61 @@ export default function StudentTestJoin() {
         </button>
 
       </div>
+
+      {showCodePrompt && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 15, 18, 0.8)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
+        }}>
+          <div style={{
+            backgroundColor: 'var(--color-paper-white)', padding: '40px', borderRadius: '24px', width: '100%', maxWidth: '440px',
+            border: '2px solid var(--color-ink)', boxShadow: '8px 8px 0px var(--color-ink)', textAlign: 'center'
+          }}>
+            <h2 style={{ fontSize: '24px', color: 'var(--color-ink)', marginBottom: '8px' }}>Enter Join Code</h2>
+            <p style={{ color: 'var(--color-fog)', fontSize: '15px', marginBottom: '32px' }}>
+              Your professor will provide a 6-digit code to start this live test.
+            </p>
+
+            {joinError && (
+              <div style={{ padding: '12px 16px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '12px', marginBottom: '24px', fontSize: '14px', fontWeight: 500, border: '1px solid #fca5a5' }}>
+                {joinError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <input 
+                type="text" 
+                className="admin-input" 
+                placeholder="6-DIGIT CODE"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                maxLength={6}
+                style={{ textAlign: 'center', fontSize: '24px', letterSpacing: '8px', textTransform: 'uppercase', padding: '16px' }}
+                required
+              />
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button 
+                  onClick={() => { setShowCodePrompt(false); setJoinError(''); }}
+                  className="admin-btn-secondary"
+                  style={{ flex: 1, padding: '16px', fontSize: '16px' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleVerifyCode}
+                  disabled={starting || joinCode.length < 6}
+                  className="admin-btn-primary"
+                  style={{ flex: 1, padding: '16px', fontSize: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', opacity: (starting || joinCode.length < 6) ? 0.7 : 1, cursor: (starting || joinCode.length < 6) ? 'not-allowed' : 'pointer' }}
+                >
+                  {starting ? 'Joining...' : 'Join Now'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

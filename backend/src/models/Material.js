@@ -5,7 +5,32 @@ const materialSchema = new mongoose.Schema(
     classroomId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Classroom',
-      required: true,
+      default: null, // Backward-compat
+    },
+    courseOfferingId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'CourseOffering',
+      default: null,
+    },
+    academicSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AcademicSession',
+      default: null,
+    },
+    academicPeriodId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AcademicPeriod',
+      default: null,
+    },
+    teachingGroupId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TeachingGroup',
+      default: null,
+    },
+    practicalGroupId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'PracticalGroup',
+      default: null,
     },
     topic: {
       type: String,

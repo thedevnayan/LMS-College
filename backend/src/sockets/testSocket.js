@@ -67,20 +67,26 @@ const initSocket = (server) => {
     });
 
     // ── Student submits an answer (persisted to DB immediately) ──
-    socket.on('submit_answer', async ({ testId, userId, userName, questionId, selectedOption, isCorrect, points, currentScore }) => {
+    socket.on('submit_answer', async ({ testId, userId, userName, questionId, selectedOption, isCorrect, points, currentScore, codingSourceCode }) => {
       try {
+        const answerPayload = {
+          questionId,
+          isCorrect,
+          pointsAwarded: points
+        };
+        
+        if (selectedOption !== undefined && selectedOption !== null) {
+          answerPayload.mcqOptionIndex = selectedOption;
+        }
+        if (codingSourceCode) {
+          answerPayload.codingSourceCode = codingSourceCode;
+        }
+
         // Push the answer into the student's TestAttempt and update score atomically
         await TestAttempt.findOneAndUpdate(
           { testId, studentId: userId },
           {
-            $push: {
-              answers: {
-                questionId,
-                mcqOptionIndex: selectedOption,
-                isCorrect,
-                pointsAwarded: points
-              }
-            },
+            $push: { answers: answerPayload },
             $set: { score: currentScore }
           }
         );

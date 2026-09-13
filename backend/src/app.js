@@ -22,6 +22,9 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const classroomRoutes = require('./routes/classroomRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const studentRoutes = require('./routes/studentRoutes');
+const codeRoutes = require('./routes/codeRoutes');
+const academicRoutes = require('./routes/academicRoutes');
+const misRoutes = require('./routes/misRoutes');
 
 const app = express();
 
@@ -50,9 +53,21 @@ const globalLimiter = rateLimit({
 });
 app.use('/api', globalLimiter);
 
-// ─── Body Parsing ───
+// ─── Body Parsing & CORS ───
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  process.env.CORS_ORIGIN,
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      return callback(null, true);
+    }
+    return callback(null, true); // Permissive for local dev
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));          // Cap JSON body size
@@ -62,6 +77,8 @@ app.use(cookieParser());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/academic', academicRoutes);
+app.use('/api/mis', misRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/courses/:courseId/modules', moduleRoutes); 
 app.use('/api/courses/:courseId/batches', batchRoutes);
@@ -83,6 +100,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/classrooms', classroomRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/students', studentRoutes);
+app.use('/api/code', codeRoutes);
 
 // Health Check Route
 app.get('/api/health', (req, res) => {

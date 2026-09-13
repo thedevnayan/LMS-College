@@ -323,6 +323,47 @@ const getMyAttempt = asyncHandler(async (req, res, next) => {
   }));
 });
 
+/**
+ * @route   GET /api/tests/:id/report
+ * @access  Professor
+ * @desc    Fetch aggregated report of all student attempts for a test
+ */
+const getTestReport = asyncHandler(async (req, res, next) => {
+  const TestAttempt = require('../models/TestAttempt');
+
+  const test = await Test.findById(req.params.id)
+    .populate('classroomId', 'courseId classBatch type')
+    .lean();
+  
+  if (!test) return next(new ApiError(404, 'NOT_FOUND', 'Test not found'));
+  
+  await getAccessDetails(test.classroomId._id, req.user);
+
+  const attempts = await TestAttempt.find({ testId: test._id })
+    .populate('studentId', 'name email rollNumber')
+    .sort({ score: -1 })
+    .lean();
+
+  const totalParticipants = attempts.length;
+  const averageScore = totalParticipants > 0 
+    ? (attempts.reduce((acc, curr) => acc + curr.score, 0) / totalParticipants).toFixed(2)
+    : 0;
+  
+  const highestScore = totalParticipants > 0 ? attempts[0].score : 0;
+  const lowestScore = totalParticipants > 0 ? [...attempts].sort((a,b) => a.score - b.score)[0].score : 0;
+
+  res.status(200).json(successResponse({
+    test,
+    stats: {
+      totalParticipants,
+      averageScore: parseFloat(averageScore),
+      highestScore,
+      lowestScore
+    },
+    attempts
+  }));
+});
+
 module.exports = {
   getTests,
   getAllTestsForProfessor,
@@ -333,5 +374,6 @@ module.exports = {
   generateJoinCode,
   verifyJoinCode,
   getLiveState,
-  getMyAttempt
+  getMyAttempt,
+  getTestReport
 };

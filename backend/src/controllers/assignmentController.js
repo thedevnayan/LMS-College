@@ -192,7 +192,7 @@ const deleteAssignment = asyncHandler(async (req, res, next) => {
  * @access  Professor (Owner only)
  */
 const getAssignmentSubmissions = asyncHandler(async (req, res, next) => {
-  const { paginate } = require('../utils/pagination');
+  const paginate = require('../utils/paginate');
   const { paginatedResponse } = require('../utils/response');
   const Classroom = require('../models/Classroom');
   const assignment = await Assignment.findById(req.params.id);

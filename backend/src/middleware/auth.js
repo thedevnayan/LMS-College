@@ -48,8 +48,25 @@ const protect = asyncHandler(async (req, res, next) => {
  */
 const authorize = (...roles) => {
   return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      return next(new ApiError(403, 'FORBIDDEN', `User role ${req.user ? req.user.role : 'unknown'} is not authorized to access this route`));
+    if (!req.user) {
+      return next(new ApiError(401, 'UNAUTHORIZED', 'Not authenticated'));
+    }
+    const userRole = req.user.role;
+    // Normalize aliases: professor and teacher are interchangeable
+    const effectiveRoles = [...roles];
+    if (effectiveRoles.includes('professor') && !effectiveRoles.includes('teacher')) {
+      effectiveRoles.push('teacher');
+    }
+    if (effectiveRoles.includes('teacher') && !effectiveRoles.includes('professor')) {
+      effectiveRoles.push('professor');
+    }
+    // Admin has superuser access to professor/teacher routes
+    if ((effectiveRoles.includes('professor') || effectiveRoles.includes('teacher')) && !effectiveRoles.includes('admin')) {
+      effectiveRoles.push('admin');
+    }
+
+    if (!effectiveRoles.includes(userRole)) {
+      return next(new ApiError(403, 'FORBIDDEN', `User role ${userRole} is not authorized to access this route`));
     }
     next();
   };

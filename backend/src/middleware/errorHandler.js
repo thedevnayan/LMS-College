@@ -18,7 +18,7 @@ const errorHandler = (err, req, res, next) => {
   if (process.env.NODE_ENV === 'development') {
     console.error(err);
   } else {
-    console.error(`[${err.errorCode || 'ERROR'}] ${err.message}`);
+    console.error(`[${err.errorCode || 'ERROR'}] ${err.message}`, err.errors ? err.errors : '');
   }
 
   let statusCode = err.statusCode || 500;

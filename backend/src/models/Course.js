@@ -21,6 +21,26 @@ const courseSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    code: {
+      type: String,
+      default: '',
+      trim: true,
+      uppercase: true,
+    },
+    credits: {
+      type: Number,
+      default: 4,
+    },
+    departmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Department',
+      default: null,
+    },
+    classification: {
+      type: String,
+      enum: ['theory', 'practical', 'both'],
+      default: 'both',
+    },
     published: {
       type: Boolean,
       default: false,

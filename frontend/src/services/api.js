@@ -1,9 +1,12 @@
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 /**
  * Get the stored access token
  */
-export const getToken = () => localStorage.getItem('accessToken');
+export const getToken = () => {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('accessToken');
+};
 
 /**
  * Store the access token
@@ -61,7 +64,9 @@ async function request(endpoint, options = {}) {
     } else {
       // Refresh failed — clear token and redirect to student login
       removeToken();
-      window.location.href = '/login';
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
       throw new Error('Session expired');
     }
   }
@@ -134,6 +139,12 @@ export const testsAPI = {
   verifyJoinCode: (code) => request(`/tests/join/${code}`),
   getLiveState: (id) => request(`/tests/${id}/live-state`),
   getMyAttempt: (id) => request(`/tests/${id}/my-attempt`),
+  getReport: (id) => request(`/tests/${id}/report`),
+};
+// ─── CODE EXECUTION API ───
+export const codeAPI = {
+  run: (data) => request('/code/run', { method: 'POST', body: data }),
+  submit: (testId, questionId, data) => request(`/code/submit/${testId}/${questionId}`, { method: 'POST', body: data })
 };
 
 // ─── AI API ───
@@ -190,3 +201,60 @@ export const studentsAPI = {
   getAll: () => request('/students'),
   getProfile: (id) => request(`/students/${id}/performance`),
 };
+
+// ─── Academic Structure API ───
+
+export const academicAPI = {
+  // Institutions
+  getInstitutions: () => request('/academic/institutions'),
+  createInstitution: (data) => request('/academic/institutions', { method: 'POST', body: data }),
+
+  // Departments
+  getDepartments: (params = '') => request(`/academic/departments${params ? '?' + params : ''}`),
+  createDepartment: (data) => request('/academic/departments', { method: 'POST', body: data }),
+
+  // Programs
+  getPrograms: (params = '') => request(`/academic/programs${params ? '?' + params : ''}`),
+  createProgram: (data) => request('/academic/programs', { method: 'POST', body: data }),
+
+  // Academic Sessions
+  getSessions: () => request('/academic/sessions'),
+  createSession: (data) => request('/academic/sessions', { method: 'POST', body: data }),
+  updateSession: (id, data) => request(`/academic/sessions/${id}`, { method: 'PATCH', body: data }),
+
+  // Academic Periods
+  getPeriods: (params = '') => request(`/academic/periods${params ? '?' + params : ''}`),
+
+  // Cohorts
+  getCohorts: (params = '') => request(`/academic/cohorts${params ? '?' + params : ''}`),
+  createCohort: (data) => request('/academic/cohorts', { method: 'POST', body: data }),
+
+  // Batches (Teaching Groups)
+  getBatches: (params = '') => request(`/academic/batches${params ? '?' + params : ''}`),
+  createBatch: (data) => request('/academic/batches', { method: 'POST', body: data }),
+  createPracticalGroup: (data) => request('/academic/practical-groups', { method: 'POST', body: data }),
+
+  // Course Offerings
+  getOfferings: (params = '') => request(`/academic/offerings${params ? '?' + params : ''}`),
+  createOffering: (data) => request('/academic/offerings', { method: 'POST', body: data }),
+
+  // Student Enrollment
+  enrollStudent: (data) => request('/academic/enroll', { method: 'POST', body: data }),
+
+  // Session Rollover & Promotions
+  rolloverSession: (data) => request('/academic/rollover', { method: 'POST', body: data }),
+};
+
+// ─── College MIS & Analytics API ───
+
+export const misAPI = {
+  getOverview: (sessionId = '') => request(`/mis/overview${sessionId ? '?sessionId=' + sessionId : ''}`),
+  getProgramAnalytics: (programId, sessionId = '') => request(`/mis/programs/${programId}${sessionId ? '?sessionId=' + sessionId : ''}`),
+  getCourseAnalytics: (offeringId) => request(`/mis/courses/${offeringId}`),
+  getBatchAnalytics: (batchId) => request(`/mis/batches/${batchId}`),
+  getStudentHistory: (studentId) => request(`/mis/students/${studentId}`),
+  compareSessions: () => request('/mis/compare-sessions'),
+  search: (query) => request(`/mis/search?query=${encodeURIComponent(query)}`),
+  getExportUrl: (type = 'students', sessionId = '') => `${API_BASE}/mis/reports/export?type=${type}${sessionId ? '&sessionId=' + sessionId : ''}`,
+};
+

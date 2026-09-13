@@ -1,11 +1,13 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { testsAPI } from '../services/api';
-import { PenTool, Plus, Trash2, Clock, Zap, RefreshCcw, FileCode } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { testsAPI } from '@/services/api';
+import { PenTool, Plus, Trash2, Clock, Zap, RefreshCcw, FileCode, BarChart2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function TestsList() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,7 +46,7 @@ export default function TestsList() {
       if (!test.joinCode) {
         await testsAPI.generateJoinCode(test._id);
       }
-      navigate(`/admin/live-test/${test._id}/dashboard`);
+      router.push(`/admin/live-test/${test._id}/dashboard`);
     } catch (err) {
       console.error('Failed to host live test:', err);
     }
@@ -87,7 +89,7 @@ export default function TestsList() {
         </div>
         <motion.button
           whileTap={{ scale: 0.95 }}
-          onClick={() => navigate('/admin/tests/new')}
+          onClick={() => router.push('/admin/tests/new')}
           style={{
             display: 'flex', alignItems: 'center', gap: '8px',
             padding: '12px 24px', borderRadius: '10px',
@@ -114,7 +116,7 @@ export default function TestsList() {
           {tests.map((test) => (
             <div
               key={test._id}
-              onClick={() => navigate(`/admin/tests/${test._id}/edit`)}
+              onClick={() => router.push(`/admin/tests/${test._id}/edit`)}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '24px', backgroundColor: 'var(--color-paper-white)',
@@ -161,6 +163,18 @@ export default function TestsList() {
                     Host Live
                   </button>
                 )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(`/admin/tests/${test._id}/report`);
+                  }}
+                  title="View Report"
+                  style={{ padding: '8px 12px', borderRadius: '8px', border: '2px solid var(--color-fog)', backgroundColor: 'transparent', color: 'var(--color-fog)', cursor: 'pointer' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.color = '#3b82f6'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-fog)'; e.currentTarget.style.color = 'var(--color-fog)'; }}
+                >
+                  <BarChart2 size={16} />
+                </button>
                 <button
                   onClick={(e) => handleDelete(test._id, e)}
                   style={{ padding: '8px 12px', borderRadius: '8px', border: '2px solid var(--color-fog)', backgroundColor: 'transparent', color: 'var(--color-fog)', cursor: 'pointer' }}

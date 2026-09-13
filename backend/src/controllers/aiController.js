@@ -21,7 +21,13 @@ const generateQuestions = asyncHandler(async (req, res, next) => {
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
+  const model = genAI.getGenerativeModel({ 
+    model: "gemini-3.5-flash",
+    generationConfig: {
+      temperature: 0.7,
+      responseMimeType: "application/json",
+    }
+  });
 
   const prompt = `You are an expert college professor creating assignment questions.
 Generate ${count} ${difficulty} level multiple choice questions (MCQs) on the topic: "${topic}".
@@ -48,15 +54,17 @@ Example output format:
     const responseText = result.response.text().trim();
 
     // Clean up potential markdown blocks if Gemini decides to include them anyway
-    let cleanedText = responseText;
+    let cleanedText = responseText.trim();
     if (cleanedText.startsWith('```json')) {
-      cleanedText = cleanedText.replace(/^```json/, '');
+      cleanedText = cleanedText.replace(/^```json/i, '');
     } else if (cleanedText.startsWith('```')) {
-      cleanedText = cleanedText.replace(/^```/, '');
+      cleanedText = cleanedText.replace(/^```/i, '');
     }
+    cleanedText = cleanedText.trim();
     if (cleanedText.endsWith('```')) {
-      cleanedText = cleanedText.replace(/```$/, '');
+      cleanedText = cleanedText.replace(/```$/i, '');
     }
+    cleanedText = cleanedText.trim();
 
     let parsedJson = JSON.parse(cleanedText.trim());
     
