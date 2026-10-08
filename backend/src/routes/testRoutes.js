@@ -3,6 +3,12 @@ const router = express.Router({ mergeParams: true }); // Important for nested ro
 const testController = require('../controllers/testController');
 const { protect } = require('../middleware/auth');
 
+// --- Public/Guest Routes ---
+
+router.post('/join-guest', testController.joinGuestTest);
+router.get('/session/:sessionToken/state', testController.getGuestLiveState);
+
+// --- Protected Routes ---
 router.use(protect);
 
 router.route('/')

@@ -43,11 +43,9 @@ const enrollmentSchema = new mongoose.Schema(
 // TTL Index for soft deletes
 enrollmentSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
-// Ensure a student can only enroll in a course once (ignores soft-deleted ones theoretically, 
-// but to be safe we'll use a partial index if MongoDB supports it, or handle in code.
-// Given standard index:
+// Ensure a student can only enroll in a classroom once
 enrollmentSchema.index(
-  { studentId: 1, courseId: 1 }, 
+  { studentId: 1, classroomId: 1 }, 
   { unique: true, partialFilterExpression: { deletedAt: null } }
 );
 

@@ -185,7 +185,7 @@ export default function TestBuilder() {
         }
       }
     } catch (err) {
-      setAiError(err.response?.data?.message || 'Failed to generate question(s)');
+      setAiError(err.message || 'Failed to generate question(s)');
     } finally {
       setAiLoading(false);
     }
@@ -242,7 +242,7 @@ export default function TestBuilder() {
       }
       router.push('/admin/tests');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save test');
+      setError(err.message || 'Failed to save test');
     } finally {
       setLoading(false);
     }

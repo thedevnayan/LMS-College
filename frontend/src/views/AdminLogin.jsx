@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
-import { GraduationCap, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react';
+import { GraduationCap, Eye, EyeOff, ArrowRight, AlertCircle, ShieldCheck, UserCheck } from 'lucide-react';
+import Link from 'next/link';
 
 export default function AdminLogin() {
-  const { login } = useAuth();
+  const { login, user, isAuthenticated } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,24 +16,46 @@ export default function AdminLogin() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Auto redirect if already logged in with admin or faculty role
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      if (user.role === 'admin') {
+        router.push('/admin/mis');
+      } else if (['professor', 'teacher'].includes(user.role)) {
+        router.push('/admin/dashboard');
+      }
+    }
+  }, [isAuthenticated, user, router]);
+
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
       const res = await login(email, password);
-      if (res.data.user.role !== 'professor') {
-        setError('Only teachers can access the admin panel');
+      const role = res.data?.user?.role;
+      if (role === 'student') {
+        setError('Students must use the student portal to log in');
         setLoading(false);
         return;
       }
-      router.push('/admin/dashboard');
+      if (role === 'admin') {
+        router.push('/admin/mis');
+      } else {
+        router.push('/admin/dashboard');
+      }
     } catch (err) {
-      setError(err.message || 'Invalid credentials');
+      setError(err.message || 'Invalid email or password');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleQuickFill = (demoEmail, demoPassword) => {
+    setEmail(demoEmail);
+    setPassword(demoPassword);
+    setError('');
   };
 
   return (
@@ -74,7 +97,7 @@ export default function AdminLogin() {
         transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
         style={{
           width: '100%',
-          maxWidth: '420px',
+          maxWidth: '460px',
           position: 'relative',
           zIndex: 1,
         }}
@@ -88,36 +111,104 @@ export default function AdminLogin() {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            marginBottom: '40px',
+            marginBottom: '32px',
           }}
         >
           <div style={{
-            width: '56px',
-            height: '56px',
+            width: '60px',
+            height: '60px',
             borderRadius: '16px',
             background: 'linear-gradient(135deg, #ffde3b, #ff4dd5)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             marginBottom: '16px',
+            border: '2px solid var(--color-ink)',
+            boxShadow: '3px 3px 0 var(--color-ink)',
           }}>
-            <GraduationCap size={28} color="#0f0f12" strokeWidth={2.5} />
+            <GraduationCap size={32} color="#0f0f12" strokeWidth={2.5} />
           </div>
           <h1 style={{
             color: 'var(--color-ink)',
-            fontSize: 'var(--text-subheading)',
-            letterSpacing: 'var(--tracking-subheading)',
-            marginBottom: '8px',
+            fontSize: '24px',
+            fontWeight: 800,
+            letterSpacing: '-0.5px',
+            marginBottom: '6px',
+            textAlign: 'center',
           }}>
-            Teacher Admin Panel
+            College Admin & Faculty Portal
           </h1>
           <p style={{
             color: 'var(--color-fog)',
-            fontSize: 'var(--text-body)',
+            fontSize: '14px',
+            textAlign: 'center',
           }}>
-            Sign in to manage your classrooms
+            Sign in to access Institutional MIS, academics, and classrooms
           </p>
         </motion.div>
+
+        {/* Demo Credentials Quick Fill Pills */}
+        <div style={{
+          marginBottom: '20px',
+          padding: '16px',
+          borderRadius: '12px',
+          border: '1px solid var(--color-ink)',
+          backgroundColor: 'var(--color-paper-white)',
+          boxShadow: '3px 3px 0 var(--color-ink)',
+        }}>
+          <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-fog)', marginBottom: '10px' }}>
+            Quick-Fill Demo Credentials
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => handleQuickFill('admin@college.edu', 'AdminPassword@123')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: '1px solid var(--color-ink)',
+                backgroundColor: 'var(--color-sun-yellow)',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <ShieldCheck size={16} />
+              <div>
+                <div>Administrator</div>
+                <div style={{ fontSize: '10px', opacity: 0.8, fontWeight: 500 }}>Full MIS Access</div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleQuickFill('prof@test.com', 'test1234')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: '1px solid var(--color-ink)',
+                backgroundColor: 'var(--color-periwinkle)',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <UserCheck size={16} />
+              <div>
+                <div>Prof Nayan</div>
+                <div style={{ fontSize: '10px', opacity: 0.8, fontWeight: 500 }}>Faculty Panel</div>
+              </div>
+            </button>
+          </div>
+        </div>
 
         {/* Login Form */}
         <motion.form
@@ -127,9 +218,10 @@ export default function AdminLogin() {
           transition={{ delay: 0.2, duration: 0.5 }}
           style={{
             backgroundColor: 'var(--color-paper-white)',
-            borderRadius: 'var(--radius-cards)',
+            borderRadius: '16px',
             padding: '32px',
-            border: '1px solid var(--color-ink)',
+            border: '2px solid var(--color-ink)',
+            boxShadow: '5px 5px 0 var(--color-ink)',
           }}
         >
           {/* Error message */}
@@ -142,12 +234,13 @@ export default function AdminLogin() {
                 alignItems: 'center',
                 gap: '8px',
                 padding: '12px 16px',
-                borderRadius: 'var(--radius-cards)',
+                borderRadius: '8px',
                 backgroundColor: '#ffebeb',
                 border: '1px solid #ff4444',
                 marginBottom: '20px',
                 color: '#cc0000',
-                fontSize: 'var(--text-caption)',
+                fontSize: '13px',
+                fontWeight: 600,
               }}
             >
               <AlertCircle size={16} />
@@ -158,20 +251,20 @@ export default function AdminLogin() {
           {/* Email */}
           <div style={{ marginBottom: '16px' }}>
             <label className="admin-label">
-              Email
+              Official Email Address
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="professor@college.edu"
+              placeholder="admin@college.edu or prof@test.com"
               required
               className="admin-input"
             />
           </div>
 
           {/* Password */}
-          <div style={{ marginBottom: '28px' }}>
+          <div style={{ marginBottom: '24px' }}>
             <label className="admin-label">
               Password
             </label>
@@ -182,7 +275,7 @@ export default function AdminLogin() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                minLength={8}
+                minLength={6}
                 className="admin-input"
                 style={{ paddingRight: '48px' }}
               />
@@ -211,45 +304,49 @@ export default function AdminLogin() {
           <motion.button
             type="submit"
             disabled={loading}
-            whileTap={{ scale: 0.97 }}
+            whileTap={{ scale: 0.98 }}
             style={{
               width: '100%',
               padding: '14px',
-              borderRadius: 'var(--radius-buttons)',
-              border: '1px solid var(--color-ink)',
+              borderRadius: '10px',
+              border: '2px solid var(--color-ink)',
               background: loading
                 ? 'var(--color-paper-white)'
                 : 'var(--color-sun-yellow)',
               color: 'var(--color-ink)',
-              fontSize: 'var(--text-body)',
+              fontWeight: 800,
+              fontSize: '15px',
               cursor: loading ? 'wait' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
-              transition: 'opacity 200ms ease',
+              boxShadow: '3px 3px 0 var(--color-ink)',
             }}
           >
             {loading ? (
               <div className="admin-spinner-sm" />
             ) : (
               <>
-                Sign In
+                Sign In to College Panel
                 <ArrowRight size={18} />
               </>
             )}
           </motion.button>
         </motion.form>
 
-        {/* Footer hint */}
-        <p style={{
+        {/* Footer link to student login */}
+        <div style={{
           textAlign: 'center',
+          marginTop: '20px',
+          fontSize: '13px',
           color: 'var(--color-fog)',
-          fontSize: 'var(--text-caption)',
-          marginTop: '24px',
         }}>
-          Only faculty accounts can access this panel
-        </p>
+          Are you a student?{' '}
+          <Link href="/login" style={{ color: 'var(--color-ink)', fontWeight: 700, textDecoration: 'underline' }}>
+            Go to Student Portal
+          </Link>
+        </div>
       </motion.div>
     </div>
   );

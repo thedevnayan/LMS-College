@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const crypto = require('crypto');
+const { v4: uuidv4 } = require('uuid');
 
 const classroomSchema = new mongoose.Schema(
   {
@@ -41,6 +42,12 @@ const classroomSchema = new mongoose.Schema(
       unique: true,
       uppercase: true,
       // 6-char alphanumeric, auto-generated
+    },
+    enrollmentToken: {
+      type: String,
+      unique: true,
+      index: true,
+      // Auto-generated UUID — used in QR code URLs for secure enrollment
     },
     isActive: {
       type: Boolean,
@@ -112,6 +119,10 @@ classroomSchema.pre('validate', async function () {
     }
     this.joinCode = code;
   }
+  // Auto-generate enrollment token for QR codes
+  if (!this.enrollmentToken) {
+    this.enrollmentToken = uuidv4();
+  }
 });
 
 /**
@@ -125,6 +136,11 @@ classroomSchema.pre('validate', function () {
 
 // Expose the generateCode function for the controller (regenerate code)
 classroomSchema.statics.generateJoinCode = generateCode;
+
+// Static: look up an active classroom by its enrollment token
+classroomSchema.statics.findByToken = function (token) {
+  return this.findOne({ enrollmentToken: token, isActive: true, deletedAt: null });
+};
 
 const Classroom = mongoose.model('Classroom', classroomSchema);
 module.exports = Classroom;

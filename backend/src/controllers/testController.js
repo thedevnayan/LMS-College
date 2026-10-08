@@ -21,7 +21,7 @@ const getAccessDetails = async (classroomId, user) => {
     if (!enrollment) {
       throw new ApiError(403, 'FORBIDDEN', 'Not enrolled in this course');
     }
-  } else if (!isOwner) {
+  } else if (!isOwner && user.role !== 'admin') {
     throw new ApiError(403, 'FORBIDDEN', 'Not authorized');
   }
 
@@ -70,11 +70,13 @@ const getTests = asyncHandler(async (req, res, next) => {
  * @access  Professor (All tests)
  */
 const getAllTestsForProfessor = asyncHandler(async (req, res, next) => {
-  if (req.user.role !== 'professor') {
-    return next(new ApiError(403, 'FORBIDDEN', 'Only professors can view all tests'));
+  if (!['professor', 'admin', 'teacher'].includes(req.user.role)) {
+    return next(new ApiError(403, 'FORBIDDEN', 'Only faculty and administrators can view tests'));
   }
 
-  const classrooms = await Classroom.find({ professorId: req.user._id }).select('_id');
+  const classrooms = req.user.role === 'admin'
+    ? await Classroom.find().select('_id')
+    : await Classroom.find({ professorId: req.user._id }).select('_id');
   const classroomIds = classrooms.map(c => c._id);
 
   const tests = await Test.find({ classroomId: { $in: classroomIds } })
@@ -151,22 +153,25 @@ const updateTest = asyncHandler(async (req, res, next) => {
 
   await getAccessDetails(test.classroomId, req.user);
 
-  const { title, description, testType, status, timeLimit, questions } = req.body;
+  const { title, description, testType, status, timeLimit, questions, liveStatus } = req.body;
 
   const oldStatus = test.status;
+  const oldLiveStatus = test.liveStatus;
 
   if (title) test.title = title;
   if (description !== undefined) test.description = description;
   if (testType) test.testType = testType;
   if (status) test.status = status;
+  if (liveStatus) test.liveStatus = liveStatus;
   if (timeLimit !== undefined) test.timeLimit = timeLimit;
   if (questions) test.questions = questions;
 
   await test.save();
 
+  const { getIo } = require('../sockets/testSocket');
+
   // If status changed to published or active, notify classroom
   if (status && status !== oldStatus && (status === 'published' || status === 'active')) {
-    const { getIo } = require('../sockets/testSocket');
     try {
       getIo().to(`classroom_${test.classroomId}`).emit('test_hosted', {
         testId: test._id,
@@ -176,6 +181,15 @@ const updateTest = asyncHandler(async (req, res, next) => {
       });
     } catch (err) {
       console.error('Socket error on updateTest:', err);
+    }
+  }
+
+  // If liveStatus changed to ended, notify all students in the test room
+  if (liveStatus === 'ended' && oldLiveStatus !== 'ended') {
+    try {
+      getIo().to(test._id.toString()).emit('test_ended', { testId: test._id });
+    } catch (err) {
+      console.error('Socket error on emitting test_ended:', err);
     }
   }
 
@@ -269,13 +283,24 @@ const getLiveState = asyncHandler(async (req, res, next) => {
     .populate('studentId', 'name email')
     .lean();
 
-  const students = attempts.map(a => ({
-    userId: a.studentId._id,
-    userName: a.studentId.name,
-    score: a.score,
-    completed: a.status === 'completed',
-    answers: a.answers
-  }));
+  const students = attempts.map(a => {
+    if (a.isGuest) {
+      return {
+        userId: a.guestId,
+        userName: a.guestName,
+        score: a.score,
+        completed: a.status === 'completed',
+        answers: a.answers
+      };
+    }
+    return {
+      userId: a.studentId?._id || 'unknown',
+      userName: a.studentId?.name || 'Unknown Student',
+      score: a.score,
+      completed: a.status === 'completed',
+      answers: a.answers
+    };
+  });
 
   res.status(200).json(successResponse({
     test,
@@ -344,13 +369,28 @@ const getTestReport = asyncHandler(async (req, res, next) => {
     .sort({ score: -1 })
     .lean();
 
-  const totalParticipants = attempts.length;
+  // Normalize guest details for the report
+  const normalizedAttempts = attempts.map(a => {
+    if (a.isGuest) {
+      return {
+        ...a,
+        studentId: {
+          name: a.guestName + ' (Guest)',
+          email: 'N/A',
+          rollNumber: 'GUEST'
+        }
+      };
+    }
+    return a;
+  });
+
+  const totalParticipants = normalizedAttempts.length;
   const averageScore = totalParticipants > 0 
-    ? (attempts.reduce((acc, curr) => acc + curr.score, 0) / totalParticipants).toFixed(2)
+    ? (normalizedAttempts.reduce((acc, curr) => acc + curr.score, 0) / totalParticipants).toFixed(2)
     : 0;
   
-  const highestScore = totalParticipants > 0 ? attempts[0].score : 0;
-  const lowestScore = totalParticipants > 0 ? [...attempts].sort((a,b) => a.score - b.score)[0].score : 0;
+  const highestScore = totalParticipants > 0 ? normalizedAttempts[0].score : 0;
+  const lowestScore = totalParticipants > 0 ? [...normalizedAttempts].sort((a,b) => a.score - b.score)[0].score : 0;
 
   res.status(200).json(successResponse({
     test,
@@ -360,7 +400,94 @@ const getTestReport = asyncHandler(async (req, res, next) => {
       highestScore,
       lowestScore
     },
-    attempts
+    attempts: normalizedAttempts
+  }));
+});
+
+/**
+ * @route   POST /api/tests/join-guest
+ * @access  Public
+ * @desc    Join a test as a guest via QR session token
+ */
+const joinGuestTest = asyncHandler(async (req, res, next) => {
+  const { sessionToken, guestName, guestId } = req.body;
+  
+  if (!sessionToken || !guestName || !guestId) {
+    return next(new ApiError(400, 'BAD_REQUEST', 'sessionToken, guestName, and guestId are required'));
+  }
+
+  const test = await Test.findOne({ sessionToken }).lean();
+  if (!test) return next(new ApiError(404, 'NOT_FOUND', 'Invalid or expired test session'));
+  // We allow joining as long as the test exists. Wait for teacher to start it.
+
+  const TestAttempt = require('../models/TestAttempt');
+  
+  // Find existing attempt or create new one for this guest
+  let attempt = await TestAttempt.findOne({ testId: test._id, guestId });
+  if (!attempt) {
+    attempt = await TestAttempt.create({
+      testId: test._id,
+      isGuest: true,
+      guestId,
+      guestName,
+      status: 'started',
+      score: 0,
+      answers: [],
+      startedAt: new Date()
+    });
+  }
+
+  // Strip correct answers
+  if (test.questions) {
+    test.questions.forEach(q => {
+      delete q.correctOptionIndex;
+      if (q.testCases) {
+        q.testCases = q.testCases.filter(tc => !tc.isHidden);
+      }
+    });
+  }
+
+  res.status(200).json(successResponse({ test, attempt }));
+});
+
+/**
+ * @route   GET /api/tests/session/:sessionToken/state
+ * @access  Public
+ * @desc    Get live state for a guest via session token
+ */
+const getGuestLiveState = asyncHandler(async (req, res, next) => {
+  const { sessionToken } = req.params;
+  const { guestId } = req.query; // Send guestId in query to get attempt
+
+  const test = await Test.findOne({ sessionToken }).select('currentQuestionIndex turnUserId liveStatus testType timeLimit title questions startTime endTime').lean();
+  if (!test) return next(new ApiError(404, 'NOT_FOUND', 'Invalid or expired test session'));
+
+  let attempt = null;
+  if (guestId) {
+    const TestAttempt = require('../models/TestAttempt');
+    attempt = await TestAttempt.findOne({ testId: test._id, guestId }).lean();
+  }
+
+  // Strip correct answers
+  if (test.questions) {
+    test.questions.forEach(q => {
+      delete q.correctOptionIndex;
+      if (q.testCases) {
+        q.testCases = q.testCases.filter(tc => !tc.isHidden);
+      }
+    });
+  }
+
+  res.status(200).json(successResponse({
+    attempt,
+    liveState: {
+      currentQuestionIndex: test.currentQuestionIndex || 0,
+      turnUserId: test.turnUserId || null,
+      liveStatus: test.liveStatus,
+      startTime: test.startTime,
+      endTime: test.endTime
+    },
+    test
   }));
 });
 
@@ -375,5 +502,7 @@ module.exports = {
   verifyJoinCode,
   getLiveState,
   getMyAttempt,
-  getTestReport
+  getTestReport,
+  joinGuestTest,
+  getGuestLiveState
 };

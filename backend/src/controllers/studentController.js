@@ -15,16 +15,19 @@ const { ApiError } = require('../middleware/errorHandler');
  * @desc    Get all students enrolled in any of the professor's classrooms, with their aggregated stats
  */
 const getTeacherStudents = asyncHandler(async (req, res, next) => {
-  if (req.user.role !== 'professor') {
-    return next(new ApiError(403, 'FORBIDDEN', 'Only professors can view students'));
+  const isFaculty = ['admin', 'professor', 'teacher'].includes(req.user.role);
+  if (!isFaculty) {
+    return next(new ApiError(403, 'FORBIDDEN', 'Only faculty and administrators can view students'));
   }
 
-  // Find all classrooms owned by the professor
-  const classrooms = await Classroom.find({ professorId: req.user._id });
+  // Find all classrooms: admin sees all classrooms, professors see their own
+  const classrooms = req.user.role === 'admin'
+    ? await Classroom.find()
+    : await Classroom.find({ professorId: req.user._id });
   const classroomIds = classrooms.map(c => c._id);
 
   // Find all enrollments in these classrooms
-  const enrollments = await Enrollment.find({ classroomId: { $in: classroomIds }, deletedAt: null }).populate('studentId', 'name email avatarUrl');
+  const enrollments = await Enrollment.find({ classroomId: { $in: classroomIds }, deletedAt: null }).populate('studentId', 'name email avatarUrl educationGap admissionYear qualification');
 
   // Group by student
   const studentMap = {};
@@ -38,11 +41,34 @@ const getTeacherStudents = asyncHandler(async (req, res, next) => {
         name: e.studentId.name,
         email: e.studentId.email,
         avatarUrl: e.studentId.avatarUrl,
+        educationGap: e.studentId.educationGap || 'None (Continuous Enrollment)',
+        admissionYear: e.studentId.admissionYear || 2026,
+        qualification: e.studentId.qualification || 'Higher Secondary / 10+2',
         classroomsEnrolled: 0,
       };
     }
     studentMap[sId].classroomsEnrolled += 1;
   });
+
+  // If admin, also include all registered students even if not in a legacy classroom
+  if (req.user.role === 'admin') {
+    const allStudents = await User.find({ role: 'student' }).select('name email avatarUrl educationGap admissionYear qualification');
+    allStudents.forEach(st => {
+      const sId = st._id.toString();
+      if (!studentMap[sId]) {
+        studentMap[sId] = {
+          _id: st._id,
+          name: st.name,
+          email: st.email,
+          avatarUrl: st.avatarUrl,
+          educationGap: st.educationGap || 'None (Continuous Enrollment)',
+          admissionYear: st.admissionYear || 2026,
+          qualification: st.qualification || 'Higher Secondary / 10+2',
+          classroomsEnrolled: 0,
+        };
+      }
+    });
+  }
 
   const students = Object.values(studentMap);
 
@@ -89,26 +115,31 @@ const getTeacherStudents = asyncHandler(async (req, res, next) => {
 
 /**
  * @route   GET /api/students/:id/performance
- * @access  Professor only
+ * @access  Professor & Admin
  * @desc    Get detailed performance chart data for a specific student
  */
 const getStudentProfile = asyncHandler(async (req, res, next) => {
-  if (req.user.role !== 'professor') {
-    return next(new ApiError(403, 'FORBIDDEN', 'Only professors can view student profiles'));
+  const isFaculty = ['admin', 'professor', 'teacher'].includes(req.user.role);
+  if (!isFaculty) {
+    return next(new ApiError(403, 'FORBIDDEN', 'Only faculty and administrators can view student profiles'));
   }
 
   const studentId = req.params.id;
-  const student = await User.findById(studentId).select('name email avatarUrl');
+  const student = await User.findById(studentId).select('name email avatarUrl educationGap admissionYear qualification');
   if (!student) {
     return next(new ApiError(404, 'NOT_FOUND', 'Student not found'));
   }
 
-  const classrooms = await Classroom.find({ professorId: req.user._id });
+  const classrooms = req.user.role === 'admin'
+    ? await Classroom.find()
+    : await Classroom.find({ professorId: req.user._id });
   const classroomIds = classrooms.map(c => c._id);
 
-  const isEnrolled = await Enrollment.findOne({ studentId: studentId, classroomId: { $in: classroomIds }, deletedAt: null });
-  if (!isEnrolled) {
-    return next(new ApiError(403, 'FORBIDDEN', 'This student is not enrolled in any of your classes'));
+  if (req.user.role !== 'admin') {
+    const isEnrolled = await Enrollment.findOne({ studentId: studentId, classroomId: { $in: classroomIds }, deletedAt: null });
+    if (!isEnrolled) {
+      return next(new ApiError(403, 'FORBIDDEN', 'This student is not enrolled in any of your classes'));
+    }
   }
 
   const assignments = await Assignment.find({ classroomId: { $in: classroomIds } });

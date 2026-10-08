@@ -1,4 +1,6 @@
 const express = require('express');
+// Preload and register all domain models
+require('./models');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
@@ -25,6 +27,7 @@ const studentRoutes = require('./routes/studentRoutes');
 const codeRoutes = require('./routes/codeRoutes');
 const academicRoutes = require('./routes/academicRoutes');
 const misRoutes = require('./routes/misRoutes');
+const enrollRoutes = require('./routes/enrollRoutes');
 
 const app = express();
 
@@ -76,6 +79,7 @@ app.use(cookieParser());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/enroll', enrollRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/academic', academicRoutes);
 app.use('/api/mis', misRoutes);

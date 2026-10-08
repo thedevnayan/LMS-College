@@ -23,7 +23,7 @@ const getAccessDetails = async (classroomId, user) => {
     if (!enrollment) {
       throw new ApiError(403, 'FORBIDDEN', 'Not enrolled in this course');
     }
-  } else if (!isOwner) {
+  } else if (!isOwner && user.role !== 'admin') {
     throw new ApiError(403, 'FORBIDDEN', 'Not authorized');
   }
 

@@ -4,23 +4,33 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
+import { useAcademic } from '@/context/AcademicContext';
 import { classroomsAPI } from '@/services/api';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   Plus, Copy, Check, Users, BookOpen, Calendar,
-  FlaskConical, BookMarked, ChevronRight, RefreshCw, Search
+  FlaskConical, BookMarked, ChevronRight, RefreshCw, Search, Zap, QrCode, Link2, ToggleLeft, ToggleRight, UserPlus, X
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const { activeSession } = useAcademic();
   const router = useRouter();
   const [classrooms, setClassrooms] = useState([]);
+  const [batchCodes, setBatchCodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [copiedCode, setCopiedCode] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [qrModal, setQrModal] = useState(null);
+  const [createTeacherModal, setCreateTeacherModal] = useState(false);
+  const [teacherForm, setTeacherForm] = useState({ name: '', email: '', password: '', role: 'professor' });
+  const [creatingTeacher, setCreatingTeacher] = useState(false);
 
   useEffect(() => {
     fetchClassrooms();
-  }, []);
+    fetchBatchCodes();
+  }, [activeSession]);
 
   const fetchClassrooms = async () => {
     setLoading(true);
@@ -36,10 +46,76 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchBatchCodes = async () => {
+    try {
+      const res = await classroomsAPI.getBatchCodes(activeSession?.name);
+      if (res.success) {
+        setBatchCodes(res.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch batch codes:', err);
+    }
+  };
+
+  const copyEnrollLink = (enrollmentToken) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const url = `${origin}/enroll/${enrollmentToken}`;
+    navigator.clipboard.writeText(url);
+    setCopiedCode(enrollmentToken);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
   const copyCode = (code) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
+  };
+
+  const toggleBatchLogin = async (id, currentState) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/classrooms/batch-codes/${id}/toggle-login`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message);
+        fetchBatchCodes(); // Refresh to get updated state
+      } else {
+        toast.error(data.error?.message || 'Failed to toggle login');
+      }
+    } catch (err) {
+      toast.error('Failed to toggle login access');
+    }
+  };
+
+  const handleCreateTeacher = async (e) => {
+    e.preventDefault();
+    setCreatingTeacher(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify(teacherForm)
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Successfully created credentials for ${teacherForm.name}`);
+        setCreateTeacherModal(false);
+        setTeacherForm({ name: '', email: '', password: '', role: 'professor' });
+      } else {
+        toast.error(data.error?.message || 'Failed to create teacher');
+      }
+    } catch (err) {
+      toast.error('Failed to create teacher');
+    } finally {
+      setCreatingTeacher(false);
+    }
   };
 
   // Stats
@@ -55,7 +131,6 @@ export default function AdminDashboard() {
     return (
       c.classBatch.toLowerCase().includes(q) ||
       c.session.toLowerCase().includes(q) ||
-      c.joinCode.toLowerCase().includes(q) ||
       courseName.toLowerCase().includes(q)
     );
   });
@@ -98,27 +173,50 @@ export default function AdminDashboard() {
             Manage your classrooms and track students
           </p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.97 }}
-          onClick={() => router.push('/admin/classrooms/new')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '12px 20px',
-            borderRadius: '10px',
-            border: 'none',
-            background: 'var(--color-sun-yellow)',
-            color: 'var(--color-ink)',
-            fontSize: 'var(--text-body)',
-            border: '1px solid var(--color-ink)',
-            cursor: 'pointer',
-          }}
-        >
-          <Plus size={18} />
-          New Classroom
-        </motion.button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          {user?.role === 'admin' && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setCreateTeacherModal(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 20px',
+                borderRadius: '10px',
+                border: '1px solid var(--color-ink)',
+                background: 'var(--color-paper-white)',
+                color: 'var(--color-ink)',
+                fontSize: 'var(--text-body)',
+                cursor: 'pointer',
+              }}
+            >
+              <UserPlus size={18} />
+              Create Teacher
+            </motion.button>
+          )}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => router.push('/admin/classrooms/new')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              borderRadius: '10px',
+              background: 'var(--color-sun-yellow)',
+              color: 'var(--color-ink)',
+              fontSize: 'var(--text-body)',
+              border: '1px solid var(--color-ink)',
+              cursor: 'pointer',
+            }}
+          >
+            <Plus size={18} />
+            New Classroom
+          </motion.button>
+        </div>
       </motion.div>
 
       {/* Stats Grid */}
@@ -169,6 +267,182 @@ export default function AdminDashboard() {
           </motion.div>
         ))}
       </div>
+
+      {/* ─── SINGLE-CODE BATCH ONBOARDING SECTION ─── */}
+      {batchCodes.length > 0 && (
+        <div style={{
+          backgroundColor: 'var(--color-paper-white)',
+          borderRadius: '16px',
+          border: '2px solid var(--color-ink)',
+          padding: '24px',
+          boxShadow: '4px 4px 0 var(--color-ink)',
+          marginBottom: '32px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <Zap size={18} color="var(--color-ink)" fill="var(--color-sun-yellow)" />
+                <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-ink)', margin: 0 }}>
+                  Batch Join Codes
+                </h3>
+              </div>
+              <p style={{ color: 'var(--color-fog)', fontSize: '13px', margin: 0 }}>
+                One code to join all theory & lab classes for a batch.
+              </p>
+            </div>
+          </div>
+
+          {/* Batch Cards Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+            {batchCodes.map((b) => (
+              <div
+                key={`${b.session}-${b.classBatch}`}
+                style={{
+                  backgroundColor: 'var(--color-warm-linen)',
+                  borderRadius: '12px',
+                  border: '1.5px solid var(--color-ink)',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                }}
+              >
+                {/* Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-ink)' }}>
+                      Batch {b.classBatch}
+                    </span>
+                    <span style={{ fontSize: '12px', color: 'var(--color-fog)', marginLeft: '8px' }}>
+                      Session {b.session}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', backgroundColor: 'var(--color-paper-white)', border: '1px solid var(--color-ink)' }}>
+                    {b.theoryClassesCount + b.labClassesCount} Classes Total
+                  </span>
+                </div>
+
+                {/* Sub-Batches / Direct Lab Codes (Fastest Onboarding) */}
+                {b.subBatches && b.subBatches.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800, color: 'var(--color-fog)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <FlaskConical size={12} /> Lab Groups
+                    </div>
+                    {b.subBatches.map((sb) => (
+                      <div
+                        key={sb.code}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 12px',
+                          backgroundColor: 'var(--color-paper-white)',
+                          borderRadius: '8px',
+                          border: '1px solid var(--color-ink)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: 'rgba(255,77,213,0.15)',
+                            border: '1px solid var(--color-ink)',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                          }}>
+                            Lab {sb.labBatch}
+                          </span>
+                          <span style={{ fontSize: '11px', color: 'var(--color-fog)', fontWeight: 600 }}>
+                            {sb.totalClassesCount} Classes
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => copyCode(sb.code)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--color-ink)',
+                            backgroundColor: copiedCode && copiedCode === sb.code ? 'var(--color-spring-green)' : 'var(--color-sun-yellow)',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            boxShadow: '1px 1px 0 var(--color-ink)',
+                          }}
+                        >
+                          <span style={{ fontFamily: 'monospace', letterSpacing: '1px' }}>{sb.code}</span>
+                          {copiedCode && copiedCode === sb.code ? <Check size={14} /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Master Batch Code & Login Toggle */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px',
+                  backgroundColor: 'var(--color-paper-white)',
+                  borderRadius: '8px',
+                  border: '1px dashed var(--color-ink)',
+                }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <BookOpen size={14} color="var(--color-fog)" />
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-ink)' }}>
+                        Master Code
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleBatchLogin(b.masterCodeId, b.loginEnabled)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        padding: '4px 8px', borderRadius: '6px',
+                        backgroundColor: b.loginEnabled ? '#dcfce7' : '#fee2e2',
+                        border: `1px solid ${b.loginEnabled ? '#16a34a' : '#dc2626'}`,
+                        color: b.loginEnabled ? '#166534' : '#991b1b',
+                        fontSize: '11px', fontWeight: 800, cursor: 'pointer',
+                      }}
+                    >
+                      {b.loginEnabled ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                      {b.loginEnabled ? 'Login Enabled' : 'Login Revoked'}
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => copyCode(b.masterCode)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--color-ink)',
+                        backgroundColor: copiedCode && copiedCode === b.masterCode ? 'var(--color-spring-green)' : 'var(--color-warm-linen)',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        boxShadow: '1px 1px 0 var(--color-ink)',
+                      }}
+                    >
+                      <span style={{ fontFamily: 'monospace', letterSpacing: '1px' }}>{b.masterCode}</span>
+                      {copiedCode && copiedCode === b.masterCode ? <Check size={14} /> : <Copy size={14} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Classrooms Section */}
       <div style={{
@@ -292,7 +566,7 @@ export default function AdminDashboard() {
                     subBatches: c.type === 'lab' && c.labBatch ? [{
                       _id: c._id,
                       labBatch: c.labBatch,
-                      joinCode: c.joinCode,
+                      enrollmentToken: c.enrollmentToken,
                       studentCount: c.studentCount || 0
                     }] : []
                   };
@@ -301,7 +575,7 @@ export default function AdminDashboard() {
                     acc[key].subBatches.push({
                       _id: c._id,
                       labBatch: c.labBatch,
-                      joinCode: c.joinCode,
+                      enrollmentToken: c.enrollmentToken,
                       studentCount: c.studentCount || 0
                     });
                   }
@@ -416,8 +690,26 @@ export default function AdminDashboard() {
                               }}>
                                 {sb.labBatch}
                               </span>
-                              <span style={{ fontFamily: 'monospace', fontSize: '14px', letterSpacing: '2px', fontWeight: 600, color: 'var(--color-ink)' }}>
-                                {sb.joinCode}
+                              <span
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                  padding: '4px 10px', borderRadius: '6px', fontSize: '11px',
+                                  backgroundColor: 'rgba(0,0,0,0.04)',
+                                  color: 'var(--color-ink)',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setQrModal({
+                                    token: sb.enrollmentToken,
+                                    title: group.courseId?.title || 'Untitled Course',
+                                    subtitle: `Batch ${group.classBatch} — Lab ${sb.labBatch}`,
+                                  });
+                                }}
+                              >
+                                <QrCode size={12} />
+                                Enroll
                               </span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-fog)', fontSize: '12px' }}>
@@ -444,27 +736,28 @@ export default function AdminDashboard() {
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            copyCode(group.joinCode);
+                            setQrModal({
+                              token: group.enrollmentToken,
+                              title: group.courseId?.title || 'Untitled Course',
+                              subtitle: `Batch ${group.classBatch} — Theory`,
+                            });
                           }}
                         >
                           <span style={{
-                            fontFamily: 'monospace',
-                            fontSize: '18px',
-                            letterSpacing: '3px',
-                            color: 'var(--color-ink)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            backgroundColor: 'rgba(0,0,0,0.04)',
+                            fontSize: '13px',
                             fontWeight: 600,
+                            color: 'var(--color-ink)',
+                            transition: 'background-color 0.2s ease',
                           }}>
-                            {group.joinCode}
+                            <QrCode size={14} />
+                            Enroll
                           </span>
-                          <motion.div
-                            whileTap={{ scale: 0.85 }}
-                            style={{
-                              color: copiedCode === group.joinCode ? 'var(--color-spring-green)' : 'var(--color-fog)',
-                              display: 'flex',
-                            }}
-                          >
-                            {copiedCode === group.joinCode ? <Check size={16} /> : <Copy size={16} />}
-                          </motion.div>
                         </div>
                         <div style={{
                           display: 'flex',
@@ -484,6 +777,220 @@ export default function AdminDashboard() {
           </AnimatePresence>
         </div>
       )}
+
+      {/* QR Code Modal */}
+      <AnimatePresence>
+        {qrModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(0,0,0,0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: '24px',
+            }}
+            onClick={() => setQrModal(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: 'var(--color-pure-white)',
+                borderRadius: 'var(--radius-cards)',
+                padding: '32px',
+                maxWidth: '400px',
+                width: '100%',
+                border: '1px solid var(--color-ink)',
+                boxShadow: '4px 4px 0px var(--color-ink)',
+                textAlign: 'center',
+              }}
+            >
+              <h3 style={{ color: 'var(--color-ink)', fontSize: '20px', marginBottom: '8px' }}>
+                {qrModal.title}
+              </h3>
+              <p style={{ color: 'var(--color-fog)', fontSize: '14px', marginBottom: '24px' }}>
+                {qrModal.subtitle}
+              </p>
+              
+              <div style={{
+                display: 'inline-block',
+                padding: '16px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                border: '1px solid var(--color-stone)',
+                marginBottom: '24px',
+              }}>
+                <QRCodeSVG
+                  value={(() => {
+                    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                    return `${origin}/enroll/${qrModal.token}`;
+                  })()}
+                  size={200}
+                  level="M"
+                  includeMargin={true}
+                  bgColor="#ffffff"
+                  fgColor="#000000"
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <button
+                  onClick={() => setQrModal(null)}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-ink)',
+                    backgroundColor: 'var(--color-paper-white)',
+                    color: 'var(--color-ink)',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                  }}
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => copyEnrollLink(qrModal.token)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '10px 20px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-ink)',
+                    backgroundColor: copiedCode === qrModal.token ? 'var(--color-spring-green)' : 'var(--color-sun-yellow)',
+                    color: 'var(--color-ink)',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                  }}
+                >
+                  {copiedCode === qrModal.token ? <Check size={16} /> : <Copy size={16} />}
+                  {copiedCode === qrModal.token ? 'Copied!' : 'Copy Link'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Create Teacher Modal */}
+      <AnimatePresence>
+        {createTeacherModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(0,0,0,0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: '24px',
+            }}
+            onClick={() => setCreateTeacherModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: 'var(--color-pure-white)',
+                borderRadius: 'var(--radius-cards)',
+                padding: '32px',
+                maxWidth: '400px',
+                width: '100%',
+                border: '1px solid var(--color-ink)',
+                boxShadow: '4px 4px 0px var(--color-ink)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                <h3 style={{ color: 'var(--color-ink)', fontSize: '20px', margin: 0 }}>Create Teacher</h3>
+                <button onClick={() => setCreateTeacherModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                  <X size={20} color="var(--color-ink)" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateTeacher} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--color-ink)', marginBottom: '8px' }}>Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={teacherForm.name}
+                    onChange={(e) => setTeacherForm({ ...teacherForm, name: e.target.value })}
+                    style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-ink)', fontSize: '14px' }}
+                    placeholder="E.g., Dr. Jane Doe"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--color-ink)', marginBottom: '8px' }}>Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={teacherForm.email}
+                    onChange={(e) => setTeacherForm({ ...teacherForm, email: e.target.value })}
+                    style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-ink)', fontSize: '14px' }}
+                    placeholder="teacher@college.edu"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--color-ink)', marginBottom: '8px' }}>Password</label>
+                  <input
+                    type="text"
+                    required
+                    value={teacherForm.password}
+                    onChange={(e) => setTeacherForm({ ...teacherForm, password: e.target.value })}
+                    style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-ink)', fontSize: '14px' }}
+                    placeholder="Minimum 8 chars, 1 letter, 1 number"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--color-ink)', marginBottom: '8px' }}>Role</label>
+                  <select
+                    value={teacherForm.role}
+                    onChange={(e) => setTeacherForm({ ...teacherForm, role: e.target.value })}
+                    style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-ink)', fontSize: '14px', backgroundColor: '#fff' }}
+                  >
+                    <option value="professor">Professor (Full Access)</option>
+                    <option value="teacher">Teacher (Limited Access)</option>
+                  </select>
+                </div>
+                <button
+                  type="submit"
+                  disabled={creatingTeacher}
+                  style={{
+                    marginTop: '8px',
+                    padding: '14px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-ink)',
+                    backgroundColor: 'var(--color-sun-yellow)',
+                    color: 'var(--color-ink)',
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    cursor: creatingTeacher ? 'not-allowed' : 'pointer',
+                    opacity: creatingTeacher ? 0.7 : 1
+                  }}
+                >
+                  {creatingTeacher ? 'Creating...' : 'Create Credentials'}
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

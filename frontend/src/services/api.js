@@ -1,5 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+export const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace('/api', '') : 'http://localhost:5001';
 /**
  * Get the stored access token
  */
@@ -140,6 +140,8 @@ export const testsAPI = {
   getLiveState: (id) => request(`/tests/${id}/live-state`),
   getMyAttempt: (id) => request(`/tests/${id}/my-attempt`),
   getReport: (id) => request(`/tests/${id}/report`),
+  joinGuestTest: (data) => request('/tests/join-guest', { method: 'POST', body: data }),
+  getGuestLiveState: (sessionToken, guestId) => request(`/tests/session/${sessionToken}/state${guestId ? '?guestId=' + guestId : ''}`),
 };
 // ─── CODE EXECUTION API ───
 export const codeAPI = {
@@ -167,7 +169,11 @@ export const classroomsAPI = {
 
   delete: (id) => request(`/classrooms/${id}`, { method: 'DELETE' }),
 
-  join: (joinCode) => request('/classrooms/join', { method: 'POST', body: { joinCode } }),
+  join: (joinCode, labBatch) =>
+    request('/classrooms/join', { method: 'POST', body: { joinCode, ...(labBatch ? { labBatch } : {}) } }),
+
+  getBatchCodes: (session) =>
+    request(`/classrooms/batch-codes${session ? `?session=${encodeURIComponent(session)}` : ''}`),
 
   getStudents: (id, params = '') =>
     request(`/classrooms/${id}/students${params ? '?' + params : ''}`),
@@ -231,6 +237,7 @@ export const academicAPI = {
 
   // Batches (Teaching Groups)
   getBatches: (params = '') => request(`/academic/batches${params ? '?' + params : ''}`),
+  getBatchStudents: (batchId) => request(`/academic/batches/${batchId}/students`),
   createBatch: (data) => request('/academic/batches', { method: 'POST', body: data }),
   createPracticalGroup: (data) => request('/academic/practical-groups', { method: 'POST', body: data }),
 
@@ -241,8 +248,23 @@ export const academicAPI = {
   // Student Enrollment
   enrollStudent: (data) => request('/academic/enroll', { method: 'POST', body: data }),
 
-  // Session Rollover & Promotions
+  // Batch Promotion & Session Rollover
+  promoteBatch: (data) => request('/academic/promote-batch', { method: 'POST', body: data }),
   rolloverSession: (data) => request('/academic/rollover', { method: 'POST', body: data }),
+
+  // Semester Curriculum Management
+  getCurriculum: (params = '') => request(`/academic/curriculum${params ? '?' + params : ''}`),
+  addCurriculumSubject: (data) => request('/academic/curriculum', { method: 'POST', body: data }),
+  updateCurriculumSubject: (id, data) => request(`/academic/curriculum/${id}`, { method: 'PATCH', body: data }),
+  deleteCurriculumSubject: (id) => request(`/academic/curriculum/${id}`, { method: 'DELETE' }),
+  syncCurriculumOfferings: (data) => request('/academic/curriculum/sync-offerings', { method: 'POST', body: data }),
+
+  // Faculty & Instructors
+  getFaculty: () => request('/academic/faculty'),
+
+  // Batch & Lab Faculty Allocations
+  getFacultyAllocations: (params = '') => request(`/academic/faculty-allocations${params ? '?' + params : ''}`),
+  saveFacultyAllocations: (data) => request('/academic/faculty-allocations', { method: 'POST', body: data }),
 };
 
 // ─── College MIS & Analytics API ───
@@ -256,5 +278,14 @@ export const misAPI = {
   compareSessions: () => request('/mis/compare-sessions'),
   search: (query) => request(`/mis/search?query=${encodeURIComponent(query)}`),
   getExportUrl: (type = 'students', sessionId = '') => `${API_BASE}/mis/reports/export?type=${type}${sessionId ? '&sessionId=' + sessionId : ''}`,
+};
+
+// ─── QR Enrollment API (Public) ───
+
+export const enrollAPI = {
+  getTokenInfo: (token) => request(`/enroll/${token}`),
+
+  enrollWithToken: (token, data) =>
+    request(`/enroll/${token}`, { method: 'POST', body: data }),
 };
 

@@ -5,9 +5,13 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { StudentDataProvider } from '@/context/StudentDataContext';
-import { authAPI, classroomsAPI, removeToken } from '@/services/api';
-import { LayoutDashboard, BookOpen, Clock, LogOut, User, Loader2, Search } from 'lucide-react';
-import { Toaster } from 'sonner';
+import { authAPI, classroomsAPI, removeToken, SOCKET_URL } from '@/services/api';
+import { io } from 'socket.io-client';
+import {
+  LayoutDashboard, BookOpen, Clock, LogOut, User, Loader2, Search,
+  CheckCircle2, FlaskConical, Zap, GraduationCap, QrCode
+} from 'lucide-react';
+import { Toaster, toast } from 'sonner';
 
 export default function StudentLayout({ children }) {
   const { user, setUser } = useAuth();
@@ -16,9 +20,6 @@ export default function StudentLayout({ children }) {
 
   const [classrooms, setClassrooms] = useState([]);
   const [loadingClassrooms, setLoadingClassrooms] = useState(true);
-  const [joinCode, setJoinCode] = useState('');
-  const [joinLoading, setJoinLoading] = useState(false);
-  const [joinError, setJoinError] = useState('');
 
   const fetchClassrooms = async () => {
     try {
@@ -40,57 +41,31 @@ export default function StudentLayout({ children }) {
 
   // Socket setup for real-time notifications
   useEffect(() => {
-    if (classrooms.length === 0) return;
-
-    const socketUrl = process.env.NEXT_PUBLIC_API_URL 
-      ? process.env.NEXT_PUBLIC_API_URL.replace('/api', '') 
-      : 'http://localhost:5000';
+    if (!classrooms.length) return;
+    const socket = io(SOCKET_URL, { transports: ['websocket'] });
     
-    // Lazy load socket.io-client
-    import('socket.io-client').then(({ io }) => {
-      const socket = io(socketUrl);
-
-      socket.on('connect', () => {
-        classrooms.forEach(c => {
-          socket.emit('join_classroom', c._id);
-        });
+    socket.on('connect', () => {
+      classrooms.forEach(c => {
+        socket.emit('join_classroom', c._id);
       });
-
-      socket.on('test_hosted', (data) => {
-        import('sonner').then(({ toast }) => {
-          toast.success(data.message || 'A new test is available!', {
-            action: {
-              label: 'Join Test',
-              onClick: () => router.push(`/classrooms/${data.classroomId}/tests/${data.testId}/join`)
-            },
-            duration: 20000,
-          });
-        });
-      });
-
-      return () => {
-        socket.disconnect();
-      };
     });
-  }, [classrooms, router]);
 
-  const handleJoinClassroom = async (e) => {
-    e.preventDefault();
-    if (!joinCode.trim()) return;
-    setJoinLoading(true);
-    setJoinError('');
-    try {
-      const res = await classroomsAPI.join(joinCode);
-      if (res.success) {
-        setJoinCode('');
-        await fetchClassrooms();
-      }
-    } catch (err) {
-      setJoinError(err.message || 'Failed to join classroom');
-    } finally {
-      setJoinLoading(false);
-    }
-  };
+    socket.on('new_test_published', (data) => {
+      import('sonner').then(({ toast }) => {
+        toast.success(data.message || 'A new test is available!', {
+          action: {
+            label: 'Join Test',
+            onClick: () => router.push(`/classrooms/${data.classroomId}/tests/${data.testId}/join`)
+          },
+          duration: 20000,
+        });
+      });
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [classrooms, router]);
 
   const handleLogout = async () => {
     try {
@@ -117,54 +92,43 @@ export default function StudentLayout({ children }) {
   return (
     <StudentDataProvider value={{ classrooms, loadingClassrooms }}>
       <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--color-warm-linen)' }}>
-        {/* Join Classroom Gatekeeper Modal */}
+        {/* No classrooms prompt — tells student to scan QR */}
         {needsToJoin && (
           <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: 'rgba(15, 15, 18, 0.8)', backdropFilter: 'blur(8px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+            padding: '20px',
           }}>
             <div style={{
               backgroundColor: 'var(--color-paper-white)', padding: '40px', borderRadius: '24px', width: '100%', maxWidth: '440px',
-              border: '2px solid var(--color-ink)', boxShadow: '8px 8px 0px var(--color-ink)', textAlign: 'center'
+              border: '2px solid var(--color-ink)', boxShadow: '8px 8px 0px var(--color-ink)', textAlign: 'center',
             }}>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-                <div style={{ padding: '16px', backgroundColor: 'var(--color-sun-yellow)', borderRadius: '20px', border: '2px solid var(--color-ink)' }}>
-                  <Search size={32} color="var(--color-ink)" />
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+                <div style={{ padding: '16px', backgroundColor: 'var(--color-sun-yellow)', borderRadius: '18px', border: '2px solid var(--color-ink)', boxShadow: '3px 3px 0 var(--color-ink)' }}>
+                  <QrCode size={36} color="var(--color-ink)" />
                 </div>
               </div>
-              <h2 style={{ fontSize: '24px', color: 'var(--color-ink)', marginBottom: '8px' }}>Welcome to LMS!</h2>
-              <p style={{ color: 'var(--color-fog)', fontSize: '15px', marginBottom: '32px' }}>
-                You aren&apos;t enrolled in any classes yet. Enter your professor&apos;s class code to get started.
+              <h2 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--color-ink)', marginBottom: '8px' }}>
+                Welcome to LMS!
+              </h2>
+              <p style={{ color: 'var(--color-fog)', fontSize: '14px', marginBottom: '8px', lineHeight: 1.5 }}>
+                To join your classes, scan the <strong>QR code</strong> shared by your professor.
               </p>
-
-              {joinError && (
-                <div style={{ padding: '12px 16px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '12px', marginBottom: '24px', fontSize: '14px', fontWeight: 500, border: '1px solid #fca5a5' }}>
-                  {joinError}
-                </div>
-              )}
-
-              <form onSubmit={handleJoinClassroom} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <input 
-                  type="text" 
-                  className="admin-input" 
-                  placeholder="Enter 6-digit class code"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  maxLength={6}
-                  style={{ textAlign: 'center', fontSize: '20px', letterSpacing: '4px', textTransform: 'uppercase' }}
-                  required
-                />
-                <button 
-                  type="submit" 
-                  disabled={joinLoading || joinCode.length < 6}
-                  className="admin-btn-primary"
-                  style={{ padding: '16px', fontSize: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', opacity: (joinLoading || joinCode.length < 6) ? 0.7 : 1, cursor: (joinLoading || joinCode.length < 6) ? 'not-allowed' : 'pointer' }}
-                >
-                  {joinLoading ? <Loader2 className="animate-spin" size={20} /> : <BookOpen size={20} />}
-                  Join Classroom
-                </button>
-              </form>
+              <p style={{ color: 'var(--color-fog)', fontSize: '13px', marginBottom: '24px', lineHeight: 1.5 }}>
+                The QR code will automatically enroll you in all your semester classes.
+              </p>
+              <div style={{
+                padding: '16px',
+                backgroundColor: 'var(--color-warm-linen)',
+                borderRadius: '12px',
+                border: '1px solid var(--color-stone)',
+                fontSize: '13px',
+                color: 'var(--color-charcoal)',
+                lineHeight: 1.5,
+              }}>
+                💡 <strong>Tip:</strong> Open your phone camera and point it at the QR code your teacher displayed in class or shared on the group.
+              </div>
             </div>
           </div>
         )}
@@ -214,6 +178,8 @@ export default function StudentLayout({ children }) {
               );
             })}
           </nav>
+
+
 
           {/* User Profile & Logout */}
           <div style={{ padding: '24px', borderTop: '2px solid var(--color-ink)' }}>

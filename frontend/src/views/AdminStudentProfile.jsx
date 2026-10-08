@@ -104,6 +104,19 @@ export default function AdminStudentProfile() {
           <div style={{ fontSize: '36px', fontWeight: 800, color: 'var(--color-ink)' }}>{totalTests}</div>
           <div style={{ color: 'var(--color-fog)', fontSize: '14px', marginTop: '4px' }}>Completed tests</div>
         </div>
+
+        <div style={{ backgroundColor: '#dcfce7', padding: '24px', borderRadius: '20px', border: '2px solid var(--color-ink)', boxShadow: '4px 4px 0px var(--color-ink)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+            <GraduationCap size={24} color="#166534" />
+            <h3 style={{ fontSize: '18px', color: 'var(--color-ink)', fontWeight: 700 }}>Education Gap</h3>
+          </div>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: '#166534' }}>
+            {student.educationGap || 'None (Continuous)'}
+          </div>
+          <div style={{ color: 'var(--color-fog)', fontSize: '14px', marginTop: '4px' }}>
+            Admission: {student.admissionYear || 2026} • {student.qualification || '10+2'}
+          </div>
+        </div>
       </div>
 
       {/* Charts Section */}

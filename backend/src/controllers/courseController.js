@@ -72,7 +72,7 @@ const getCourseById = asyncHandler(async (req, res, next) => {
     if (!course.published && !enrollment) {
       return next(new ApiError(403, 'FORBIDDEN', 'Course is not published'));
     }
-  } else if (!isOwner) {
+  } else if (!isOwner && user.role !== 'admin') {
     return next(new ApiError(403, 'FORBIDDEN', 'Not authorized to view this course'));
   }
 
@@ -90,12 +90,12 @@ const updateCourse = asyncHandler(async (req, res, next) => {
     return next(new ApiError(404, 'NOT_FOUND', 'Course not found'));
   }
 
-  if (course.professorId.toString() !== req.user._id.toString()) {
+  if (course.professorId.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
     return next(new ApiError(403, 'FORBIDDEN', 'Not authorized to edit this course'));
   }
 
   const { title, description, thumbnail } = req.body;
-  
+
   if (title) course.title = title;
   if (description) course.description = description;
   if (thumbnail) course.thumbnail = thumbnail;
@@ -116,7 +116,7 @@ const deleteCourse = asyncHandler(async (req, res, next) => {
     return next(new ApiError(404, 'NOT_FOUND', 'Course not found'));
   }
 
-  if (course.professorId.toString() !== req.user._id.toString()) {
+  if (course.professorId.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
     return next(new ApiError(403, 'FORBIDDEN', 'Not authorized to delete this course'));
   }
 
@@ -138,7 +138,7 @@ const publishCourse = asyncHandler(async (req, res, next) => {
     return next(new ApiError(404, 'NOT_FOUND', 'Course not found'));
   }
 
-  if (course.professorId.toString() !== req.user._id.toString()) {
+  if (course.professorId.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
     return next(new ApiError(403, 'FORBIDDEN', 'Not authorized to publish this course'));
   }
 
@@ -189,7 +189,7 @@ const getCourseStudents = asyncHandler(async (req, res, next) => {
   }
 
   const filter = { courseId: course._id };
-  
+
   // Note: batchId filter will be added in Phase 3
 
   const result = await paginate(Enrollment, filter, req.query, {

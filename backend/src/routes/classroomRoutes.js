@@ -16,11 +16,15 @@ const createClassroomValidation = [
 const joinValidation = [
   body('joinCode')
     .trim()
-    .isLength({ min: 6, max: 6 })
-    .withMessage('Join code must be exactly 6 characters'),
+    .isLength({ min: 4, max: 16 })
+    .withMessage('Join code must be between 4 and 16 characters'),
 ];
 
 router.use(protect); // All routes require authentication
+
+// Batch join codes for single-code onboarding
+router.get('/batch-codes', classroomController.getBatchCodes);
+router.patch('/batch-codes/:id/toggle-login', authorize('admin', 'professor'), classroomController.toggleBatchLogin);
 
 // Student join route (must be before /:id routes)
 router.post('/join', authorize('student'), validate(joinValidation), classroomController.joinClassroom);
@@ -28,7 +32,7 @@ router.post('/join', authorize('student'), validate(joinValidation), classroomCo
 // Professor and Student routes
 router.route('/')
   .get(classroomController.getClassrooms)
-  .post(authorize('professor'), validate(createClassroomValidation), classroomController.createClassroom);
+  .post(authorize('professor', 'admin'), validate(createClassroomValidation), classroomController.createClassroom);
 
 router.route('/:id')
   .get(classroomController.getClassroomById)

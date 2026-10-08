@@ -86,10 +86,10 @@ export default function StudentAcademicHistory({ studentId }) {
             fontSize: '22px',
             fontWeight: 700,
           }}>
-            {student.name.charAt(0)}
+            {student.name?.charAt(0) || 'S'}
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-ink)' }}>
                 {student.name}
               </h1>
@@ -103,6 +103,21 @@ export default function StudentAcademicHistory({ studentId }) {
                 textTransform: 'uppercase',
               }}>
                 Student
+              </span>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 8px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                backgroundColor: (student.educationGap?.includes('None') || !student.educationGap) ? '#dcfce7' : '#fee2e2',
+                color: (student.educationGap?.includes('None') || !student.educationGap) ? '#166534' : '#991b1b',
+                border: '1px solid var(--color-ink)',
+              }}>
+                <CheckCircle2 size={12} />
+                Education Gap: {student.educationGap || 'None (Continuous)'}
               </span>
             </div>
             <p style={{ color: 'var(--color-fog)', fontSize: '13px' }}>{student.email}</p>
@@ -122,10 +137,10 @@ export default function StudentAcademicHistory({ studentId }) {
               Current Academic Context
             </div>
             <div style={{ fontWeight: 700, fontSize: '14px', marginTop: '2px' }}>
-              {current.programId?.name} ({current.programId?.code})
+              {current.programId?.name || 'Bachelor of Computer Applications'} ({current.programId?.code || 'BCA'})
             </div>
             <div style={{ color: 'var(--color-ink)', fontSize: '13px' }}>
-              {current.academicPeriodId?.name} • {current.teachingGroupId?.name} • Session {current.academicSessionId?.name}
+              {current.academicPeriodId?.name || 'Semester 1'} • {current.teachingGroupId?.name || 'Batch A'} • Session {current.academicSessionId?.name || '2026-27'}
             </div>
           </div>
         )}
@@ -143,13 +158,20 @@ export default function StudentAcademicHistory({ studentId }) {
                 gap: '8px',
                 padding: '8px 14px',
                 borderRadius: '8px',
-                backgroundColor: ind.type === 'TOP_PERFORMER' ? 'var(--color-sun-yellow)' : 'var(--color-electric-lime)',
+                backgroundColor: ind.badgeColor || (ind.type === 'TOP_PERFORMER' ? 'var(--color-sun-yellow)' : ind.type === 'EDUCATION_GAP_WARNING' ? '#fee2e2' : 'var(--color-electric-lime)'),
+                color: ind.textColor || 'var(--color-ink)',
                 border: '1px solid var(--color-ink)',
                 fontSize: '13px',
                 fontWeight: 600,
               }}
             >
-              <TrendingUp size={16} />
+              {ind.type === 'EDUCATION_GAP_WARNING' ? (
+                <AlertCircle size={16} />
+              ) : ind.type?.includes('GAP') ? (
+                <CheckCircle2 size={16} />
+              ) : (
+                <TrendingUp size={16} />
+              )}
               <span>{ind.text}</span>
             </div>
           ))}
@@ -215,12 +237,13 @@ export default function StudentAcademicHistory({ studentId }) {
               Session Context ({activeSessionRecord.session?.name})
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
-              <div>Program: <strong>{activeSessionRecord.program?.name} ({activeSessionRecord.program?.code})</strong></div>
-              <div>Cohort: <strong>{activeSessionRecord.cohort?.name || 'N/A'}</strong></div>
-              <div>Academic Period: <strong>{activeSessionRecord.period?.name}</strong></div>
-              <div>Batch: <strong>{activeSessionRecord.batch?.name}</strong></div>
-              <div>Session Status: <strong>{activeSessionRecord.status}</strong></div>
-              <div>Session Average: <strong>{activeSessionRecord.averageScore}%</strong></div>
+              <div>Program: <strong>{activeSessionRecord.program?.name || 'Bachelor of Computer Applications'} ({activeSessionRecord.program?.code || 'BCA'})</strong></div>
+              <div>Cohort: <strong>{activeSessionRecord.cohort?.name || 'BCA 2026-29'}</strong></div>
+              <div>Academic Period: <strong>{activeSessionRecord.period?.name || 'Semester 1'}</strong></div>
+              <div>Batch: <strong>{activeSessionRecord.batch?.name || 'Batch A'}</strong></div>
+              <div>Education Gap: <strong style={{ color: activeSessionRecord.educationGap?.includes('None') ? '#166534' : '#991b1b' }}>{activeSessionRecord.educationGap || student.educationGap || 'None (Continuous Enrollment)'}</strong></div>
+              <div>Session Status: <strong>{activeSessionRecord.status || 'Active'}</strong></div>
+              <div>Session Average: <strong>{activeSessionRecord.averageScore || 0}%</strong></div>
             </div>
           </div>
 

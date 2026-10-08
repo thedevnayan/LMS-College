@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { materialsAPI } from '@/services/api';
 import { BookOpen, Plus, FileText, Download, Trash2, Video, Link as LinkIcon, Image as ImageIcon, Eye, X, ExternalLink, Maximize2, Minimize2, Presentation } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 
 export default function MaterialsList() {
   const router = useRouter();
@@ -39,8 +40,10 @@ export default function MaterialsList() {
       try {
         await materialsAPI.delete(id);
         setMaterials(prev => prev.filter(m => m._id !== id));
+        toast.success('Material deleted successfully');
       } catch (err) {
         console.error('Failed to delete material', err);
+        toast.error(err.message || 'Failed to delete material');
       }
     }
   };

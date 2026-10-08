@@ -13,6 +13,8 @@ const CourseMembership = require('../models/CourseMembership');
 const Course = require('../models/Course');
 const Classroom = require('../models/Classroom');
 const User = require('../models/User');
+const Curriculum = require('../models/Curriculum');
+const FacultyAllocation = require('../models/FacultyAllocation');
 const asyncHandler = require('../utils/asyncHandler');
 const { successResponse } = require('../utils/response');
 const { ApiError } = require('../middleware/errorHandler');
@@ -390,9 +392,188 @@ const enrollStudent = asyncHandler(async (req, res, next) => {
   res.status(201).json(successResponse({ enrollment, memberships: createdMemberships }, 'Student enrolled successfully'));
 });
 
+// ─── GET STUDENTS IN A TEACHING GROUP / BATCH ───
+const getBatchStudents = asyncHandler(async (req, res, next) => {
+  const { batchId } = req.params;
+  const enrollments = await StudentEnrollment.find({
+    teachingGroupId: batchId,
+    status: 'Active',
+  })
+    .populate('studentId', 'name email avatarUrl educationGap admissionYear qualification')
+    .populate('academicPeriodId', 'name periodNumber')
+    .populate('programId', 'name code')
+    .populate('cohortId', 'name')
+    .populate('academicSessionId', 'name')
+    .sort({ 'studentId.name': 1 });
+
+  const students = enrollments.map(e => ({
+    enrollmentId: e._id,
+    student: e.studentId,
+    status: e.status,
+    period: e.academicPeriodId,
+    program: e.programId,
+    cohort: e.cohortId,
+    session: e.academicSessionId,
+  }));
+
+  res.status(200).json(successResponse(students));
+});
+
+// ─── STANDALONE BATCH PROMOTION ───
+const promoteBatch = asyncHandler(async (req, res, next) => {
+  const {
+    sourceBatchId,
+    targetSessionId,
+    targetProgramId,
+    targetCohortId,
+    targetPeriodId,
+    targetBatchId,
+    targetBatchName,
+    selectedStudentIds,
+    excludedStudentIds = [],
+  } = req.body;
+
+  if (!sourceBatchId || !targetSessionId || !targetPeriodId) {
+    return next(new ApiError(400, 'VALIDATION_ERROR', 'sourceBatchId, targetSessionId, and targetPeriodId are required'));
+  }
+
+  const targetSession = await AcademicSession.findById(targetSessionId);
+  if (!targetSession) return next(new ApiError(404, 'NOT_FOUND', 'Target session not found'));
+
+  const sourceFilter = {
+    teachingGroupId: sourceBatchId,
+    status: 'Active',
+  };
+
+  if (Array.isArray(selectedStudentIds) && selectedStudentIds.length > 0) {
+    sourceFilter.studentId = { $in: selectedStudentIds, $nin: excludedStudentIds };
+  } else if (Array.isArray(excludedStudentIds) && excludedStudentIds.length > 0) {
+    sourceFilter.studentId = { $nin: excludedStudentIds };
+  }
+
+  const sourceEnrollments = await StudentEnrollment.find(sourceFilter);
+  if (sourceEnrollments.length === 0) {
+    return res.status(200).json(successResponse([], 'No active students found in this batch to promote'));
+  }
+
+  const programToUse = targetProgramId || sourceEnrollments[0].programId;
+  const cohortToUse = targetCohortId || sourceEnrollments[0].cohortId;
+
+  let finalTargetBatchId = targetBatchId;
+  if (!finalTargetBatchId || finalTargetBatchId === 'NEW') {
+    const batchName = targetBatchName || 'Batch A';
+    let targetGroup = await TeachingGroup.findOne({
+      academicSessionId: targetSession._id,
+      programId: programToUse,
+      academicPeriodId: targetPeriodId,
+      name: batchName,
+    });
+    if (!targetGroup) {
+      targetGroup = await TeachingGroup.create({
+        institutionId: targetSession.institutionId,
+        programId: programToUse,
+        cohortId: cohortToUse,
+        academicSessionId: targetSession._id,
+        academicPeriodId: targetPeriodId,
+        name: batchName,
+      });
+    }
+    finalTargetBatchId = targetGroup._id;
+  }
+
+  // Resolve target semester course offerings (from session offerings or auto-generated from curriculum)
+  let targetOfferings = await CourseOffering.find({
+    academicSessionId: targetSession._id,
+    programId: programToUse,
+    academicPeriodId: targetPeriodId,
+  });
+
+  if (targetOfferings.length === 0) {
+    const currSubjects = await Curriculum.find({
+      programId: programToUse,
+      academicPeriodId: targetPeriodId,
+    }).populate('courseId');
+
+    if (currSubjects.length > 0) {
+      const defaultProf = (await User.findOne({ role: 'professor' })) || req.user;
+      for (const cs of currSubjects) {
+        const off = await CourseOffering.create({
+          courseId: cs.courseId?._id || cs.courseId,
+          academicSessionId: targetSession._id,
+          programId: programToUse,
+          academicPeriodId: targetPeriodId,
+          departmentId: cs.courseId?.departmentId || null,
+          primaryTeacherId: cs.defaultTeacherId || cs.courseId?.professorId || defaultProf._id,
+          status: 'Active',
+        });
+        targetOfferings.push(off);
+      }
+    }
+  }
+
+  const results = [];
+  for (const oldEnr of sourceEnrollments) {
+    oldEnr.status = 'Promoted';
+    oldEnr.promotedAt = new Date();
+    await oldEnr.save();
+
+    const newEnr = await StudentEnrollment.create({
+      studentId: oldEnr.studentId,
+      institutionId: targetSession.institutionId,
+      programId: programToUse,
+      cohortId: cohortToUse,
+      academicSessionId: targetSession._id,
+      academicPeriodId: targetPeriodId,
+      teachingGroupId: finalTargetBatchId,
+      status: 'Active',
+      educationGap: 'None (Continuous Enrollment)',
+    });
+
+    // Auto-enroll in target semester subjects
+    for (const off of targetOfferings) {
+      const cm = await CourseMembership.findOne({ studentId: oldEnr.studentId, courseOfferingId: off._id });
+      if (!cm) {
+        await CourseMembership.create({
+          studentEnrollmentId: newEnr._id,
+          studentId: oldEnr.studentId,
+          courseOfferingId: off._id,
+          teachingGroupId: finalTargetBatchId,
+          status: 'Enrolled',
+        });
+      }
+    }
+
+    results.push({
+      studentId: oldEnr.studentId,
+      newEnrollmentId: newEnr._id,
+    });
+  }
+
+  await logAudit({
+    actor: req.user,
+    action: 'BATCH_PROMOTED',
+    entity: 'TeachingGroup',
+    entityId: finalTargetBatchId,
+    metadata: {
+      sourceBatchId,
+      promotedCount: results.length,
+      targetSession: targetSession.name,
+    }
+  });
+
+  res.status(200).json(successResponse(results, `Successfully promoted ${results.length} student(s) to the target batch`));
+});
+
 // ─── SESSION ROLLOVER & STUDENT PROMOTION (CRITICAL WORKFLOW) ───
 const rolloverSession = asyncHandler(async (req, res, next) => {
-  const { currentSessionId, newSessionName, newStartDate, newEndDate, promotions } = req.body;
+  const {
+    currentSessionId,
+    newSessionName,
+    newStartDate,
+    newEndDate,
+    promotions = [],
+    batchPromotions = [],
+  } = req.body;
 
   if (!currentSessionId || !newSessionName || !newStartDate || !newEndDate) {
     return next(new ApiError(400, 'VALIDATION_ERROR', 'currentSessionId, newSessionName, newStartDate, and newEndDate are required'));
@@ -419,8 +600,94 @@ const rolloverSession = asyncHandler(async (req, res, next) => {
   // Ensure no other session is marked current
   await AcademicSession.updateMany({ _id: { $ne: newSession._id } }, { isCurrent: false });
 
-  // 3. Process promotions (array of { studentId, programId, cohortId, newPeriodId, newTeachingGroupId, newPracticalGroupId, newCourseOfferingIds })
   const promotionResults = [];
+
+  // 3a. Process Batch-Level Promotions (all students in a batch)
+  if (Array.isArray(batchPromotions) && batchPromotions.length > 0) {
+    for (const bp of batchPromotions) {
+      const {
+        sourceBatchId,
+        targetProgramId,
+        targetCohortId,
+        targetPeriodId,
+        targetBatchId,
+        targetBatchName,
+        selectedStudentIds,
+        excludedStudentIds = [],
+      } = bp;
+
+      if (!sourceBatchId || !targetPeriodId) continue;
+
+      const sourceFilter = {
+        teachingGroupId: sourceBatchId,
+        academicSessionId: currentSession._id,
+        status: 'Active',
+      };
+
+      if (Array.isArray(selectedStudentIds) && selectedStudentIds.length > 0) {
+        sourceFilter.studentId = { $in: selectedStudentIds, $nin: excludedStudentIds };
+      } else if (Array.isArray(excludedStudentIds) && excludedStudentIds.length > 0) {
+        sourceFilter.studentId = { $nin: excludedStudentIds };
+      }
+
+      const sourceEnrollments = await StudentEnrollment.find(sourceFilter);
+      if (sourceEnrollments.length === 0) continue;
+
+      const programToUse = targetProgramId || sourceEnrollments[0].programId;
+      const cohortToUse = targetCohortId || sourceEnrollments[0].cohortId;
+
+      // Resolve or create target teaching group in the new session
+      let finalTargetBatchId = targetBatchId;
+      if (!finalTargetBatchId || finalTargetBatchId === 'NEW') {
+        const batchName = targetBatchName || 'Batch A';
+        let targetGroup = await TeachingGroup.findOne({
+          academicSessionId: newSession._id,
+          programId: programToUse,
+          academicPeriodId: targetPeriodId,
+          name: batchName,
+        });
+        if (!targetGroup) {
+          targetGroup = await TeachingGroup.create({
+            institutionId: currentSession.institutionId,
+            programId: programToUse,
+            cohortId: cohortToUse,
+            academicSessionId: newSession._id,
+            academicPeriodId: targetPeriodId,
+            name: batchName,
+          });
+        }
+        finalTargetBatchId = targetGroup._id;
+      }
+
+      for (const oldEnr of sourceEnrollments) {
+        oldEnr.status = 'Promoted';
+        oldEnr.promotedAt = new Date();
+        await oldEnr.save();
+
+        const newEnr = await StudentEnrollment.create({
+          studentId: oldEnr.studentId,
+          institutionId: currentSession.institutionId,
+          programId: programToUse,
+          cohortId: cohortToUse,
+          academicSessionId: newSession._id,
+          academicPeriodId: targetPeriodId,
+          teachingGroupId: finalTargetBatchId,
+          status: 'Active',
+          educationGap: 'None (Continuous Enrollment)',
+        });
+
+        promotionResults.push({
+          studentId: oldEnr.studentId,
+          oldSession: currentSession.name,
+          newSession: newSession.name,
+          newEnrollmentId: newEnr._id,
+          batchPromotion: true,
+        });
+      }
+    }
+  }
+
+  // 3b. Process Individual Student Promotions (if any)
   if (Array.isArray(promotions) && promotions.length > 0) {
     for (const promo of promotions) {
       const { studentId, programId, cohortId, newPeriodId, newTeachingGroupId, newPracticalGroupId, newCourseOfferingIds } = promo;
@@ -441,6 +708,7 @@ const rolloverSession = asyncHandler(async (req, res, next) => {
         academicPeriodId: newPeriodId,
         teachingGroupId: newTeachingGroupId,
         status: 'Active',
+        educationGap: 'None (Continuous Enrollment)',
       });
 
       // Enroll into new session course offerings
@@ -485,6 +753,361 @@ const rolloverSession = asyncHandler(async (req, res, next) => {
   }, 'Session rollover and student promotions completed successfully'));
 });
 
+// ─── SEMESTER CURRICULUM MANAGEMENT ───
+const getCurriculum = asyncHandler(async (req, res, next) => {
+  const { programId, academicPeriodId } = req.query;
+  if (!programId) {
+    return next(new ApiError(400, 'VALIDATION_ERROR', 'Program ID is required'));
+  }
+
+  const query = { programId };
+  if (academicPeriodId) query.academicPeriodId = academicPeriodId;
+
+  const curriculum = await Curriculum.find(query)
+    .populate('courseId', 'title code credits classification thumbnail published')
+    .populate('academicPeriodId', 'name periodNumber')
+    .populate('programId', 'name code')
+    .populate('defaultTeacherId', 'name email role')
+    .sort({ order: 1, createdAt: 1 });
+
+  res.status(200).json(successResponse(curriculum));
+});
+
+const addCurriculumSubject = asyncHandler(async (req, res, next) => {
+  const {
+    programId,
+    academicPeriodId,
+    courseId,
+    newCourse, // Optional inline course creation: { title, code, credits, classification }
+    defaultTeacherId,
+    credits,
+    classification,
+    isElective,
+    order,
+  } = req.body;
+
+  if (!programId || !academicPeriodId) {
+    return next(new ApiError(400, 'VALIDATION_ERROR', 'Program ID and Academic Period ID are required'));
+  }
+
+  let finalCourseId = courseId;
+
+  // Inline course creation if newCourse is provided
+  if (!finalCourseId && newCourse && newCourse.title) {
+    const prog = await Program.findById(programId);
+    const teacherId = defaultTeacherId || req.user._id;
+    const createdCourse = await Course.create({
+      title: newCourse.title.trim(),
+      code: newCourse.code ? newCourse.code.trim().toUpperCase() : '',
+      credits: newCourse.credits ? Number(newCourse.credits) : (credits ? Number(credits) : 4),
+      classification: newCourse.classification || classification || 'both',
+      departmentId: prog?.departmentId || null,
+      professorId: teacherId,
+      published: true,
+    });
+    finalCourseId = createdCourse._id;
+  }
+
+  if (!finalCourseId) {
+    return next(new ApiError(400, 'VALIDATION_ERROR', 'Course ID or new course details are required'));
+  }
+
+  // Check for duplicate in this semester
+  const existing = await Curriculum.findOne({
+    programId,
+    academicPeriodId,
+    courseId: finalCourseId,
+  });
+
+  if (existing) {
+    return next(new ApiError(409, 'CONFLICT', 'This subject is already in this semester curriculum'));
+  }
+
+  const courseDoc = await Course.findById(finalCourseId);
+  const finalCredits = credits !== undefined ? Number(credits) : (courseDoc?.credits || 4);
+  const finalClassification = classification || courseDoc?.classification || 'both';
+
+  const item = await Curriculum.create({
+    programId,
+    academicPeriodId,
+    courseId: finalCourseId,
+    defaultTeacherId: defaultTeacherId || courseDoc?.professorId || null,
+    credits: finalCredits,
+    classification: finalClassification,
+    isElective: Boolean(isElective),
+    order: order !== undefined ? Number(order) : 0,
+  });
+
+  const populatedItem = await Curriculum.findById(item._id)
+    .populate('courseId', 'title code credits classification thumbnail published')
+    .populate('academicPeriodId', 'name periodNumber')
+    .populate('programId', 'name code')
+    .populate('defaultTeacherId', 'name email role');
+
+  await logAudit({
+    actor: req.user,
+    action: 'CURRICULUM_SUBJECT_ADDED',
+    entity: 'Curriculum',
+    entityId: item._id,
+    metadata: { programId, academicPeriodId, courseId: finalCourseId },
+  });
+
+  res.status(201).json(successResponse(populatedItem, 'Subject added to semester curriculum successfully'));
+});
+
+const updateCurriculumSubject = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const { defaultTeacherId, credits, classification, isElective, order } = req.body;
+
+  const item = await Curriculum.findById(id);
+  if (!item) {
+    return next(new ApiError(404, 'NOT_FOUND', 'Curriculum subject not found'));
+  }
+
+  if (defaultTeacherId !== undefined) item.defaultTeacherId = defaultTeacherId || null;
+  if (credits !== undefined) item.credits = Number(credits);
+  if (classification !== undefined) item.classification = classification;
+  if (isElective !== undefined) item.isElective = Boolean(isElective);
+  if (order !== undefined) item.order = Number(order);
+
+  await item.save();
+
+  const updated = await Curriculum.findById(item._id)
+    .populate('courseId', 'title code credits classification thumbnail published')
+    .populate('academicPeriodId', 'name periodNumber')
+    .populate('programId', 'name code')
+    .populate('defaultTeacherId', 'name email role');
+
+  await logAudit({
+    actor: req.user,
+    action: 'CURRICULUM_SUBJECT_UPDATED',
+    entity: 'Curriculum',
+    entityId: item._id,
+    metadata: { updates: req.body },
+  });
+
+  res.status(200).json(successResponse(updated, 'Curriculum subject updated successfully'));
+});
+
+const deleteCurriculumSubject = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const item = await Curriculum.findById(id);
+  if (!item) {
+    return next(new ApiError(404, 'NOT_FOUND', 'Curriculum subject not found'));
+  }
+
+  item.deletedAt = new Date();
+  await item.save();
+
+  await logAudit({
+    actor: req.user,
+    action: 'CURRICULUM_SUBJECT_REMOVED',
+    entity: 'Curriculum',
+    entityId: item._id,
+    metadata: { courseId: item.courseId, programId: item.programId, academicPeriodId: item.academicPeriodId },
+  });
+
+  res.status(200).json(successResponse({ id }, 'Subject removed from curriculum successfully'));
+});
+
+const syncCurriculumToOfferings = asyncHandler(async (req, res, next) => {
+  const { programId, academicSessionId, academicPeriodId } = req.body;
+  if (!programId || !academicSessionId) {
+    return next(new ApiError(400, 'VALIDATION_ERROR', 'Program ID and Academic Session ID are required'));
+  }
+
+  const session = await AcademicSession.findById(academicSessionId);
+  if (!session) {
+    return next(new ApiError(404, 'NOT_FOUND', 'Academic session not found'));
+  }
+
+  const query = { programId };
+  if (academicPeriodId) query.academicPeriodId = academicPeriodId;
+
+  const curriculumItems = await Curriculum.find(query).populate('courseId');
+  if (curriculumItems.length === 0) {
+    return res.status(200).json(successResponse([], 'No curriculum subjects found to sync'));
+  }
+
+  const defaultFaculty = (await User.findOne({ role: 'professor' })) || req.user;
+  const syncedOfferings = [];
+
+  for (const item of curriculumItems) {
+    const courseId = item.courseId?._id || item.courseId;
+    const periodId = item.academicPeriodId;
+    const teacherId = item.defaultTeacherId || item.courseId?.professorId || defaultFaculty._id;
+
+    let offering = await CourseOffering.findOne({
+      courseId,
+      academicSessionId,
+      programId,
+      academicPeriodId: periodId,
+    });
+
+    if (!offering) {
+      offering = await CourseOffering.create({
+        courseId,
+        academicSessionId,
+        programId,
+        academicPeriodId: periodId,
+        departmentId: item.courseId?.departmentId || null,
+        primaryTeacherId: teacherId,
+        status: 'Active',
+      });
+      syncedOfferings.push({ offering, action: 'created' });
+    } else {
+      if (item.defaultTeacherId && offering.primaryTeacherId?.toString() !== item.defaultTeacherId.toString()) {
+        offering.primaryTeacherId = item.defaultTeacherId;
+        await offering.save();
+      }
+      syncedOfferings.push({ offering, action: 'existing' });
+    }
+  }
+
+  await logAudit({
+    actor: req.user,
+    action: 'CURRICULUM_SYNCED_TO_OFFERINGS',
+    entity: 'CourseOffering',
+    entityId: session._id,
+    metadata: { programId, academicSessionId, count: syncedOfferings.length },
+  });
+
+  res.status(200).json(successResponse(syncedOfferings, `Synced ${syncedOfferings.length} subjects to academic session`));
+});
+
+// ─── FACULTY & INSTRUCTORS ───
+const getFaculty = asyncHandler(async (req, res) => {
+  const faculty = await User.find({
+    role: { $in: ['professor', 'admin'] },
+  }).select('_id name email role avatarUrl').sort({ name: 1 });
+
+  res.status(200).json(successResponse(faculty));
+});
+
+// ─── BATCH & LAB FACULTY ALLOCATION ───
+const getFacultyAllocations = asyncHandler(async (req, res, next) => {
+  const { programId, academicPeriodId, academicSessionId } = req.query;
+  if (!programId || !academicPeriodId || !academicSessionId) {
+    return next(new ApiError(400, 'VALIDATION_ERROR', 'programId, academicPeriodId, and academicSessionId are required'));
+  }
+
+  const allocations = await FacultyAllocation.find({
+    programId,
+    academicPeriodId,
+    academicSessionId,
+  })
+    .populate('courseId', 'title code credits classification')
+    .populate('teachingGroupId', 'name')
+    .populate('practicalGroupId', 'name')
+    .populate('facultyId', 'name email role avatarUrl')
+    .populate('classroomId', 'joinCode session classBatch type labBatch');
+
+  res.status(200).json(successResponse(allocations));
+});
+
+const saveFacultyAllocations = asyncHandler(async (req, res, next) => {
+  const {
+    academicSessionId,
+    programId,
+    academicPeriodId,
+    allocations, // Array of { courseId, teachingGroupId, type ('theory'|'lab'), practicalGroupId (optional), facultyId }
+  } = req.body;
+
+  if (!academicSessionId || !programId || !academicPeriodId || !Array.isArray(allocations)) {
+    return next(new ApiError(400, 'VALIDATION_ERROR', 'academicSessionId, programId, academicPeriodId, and allocations array are required'));
+  }
+
+  const session = await AcademicSession.findById(academicSessionId);
+  if (!session) {
+    return next(new ApiError(404, 'NOT_FOUND', 'Academic session not found'));
+  }
+
+  const savedResults = [];
+
+  for (const alloc of allocations) {
+    const { courseId, teachingGroupId, type, practicalGroupId, facultyId } = alloc;
+    if (!courseId || !teachingGroupId || !type || !facultyId) continue;
+
+    const teachingGroup = await TeachingGroup.findById(teachingGroupId);
+    if (!teachingGroup) continue;
+
+    let practicalGroup = null;
+    if (practicalGroupId) {
+      practicalGroup = await PracticalGroup.findById(practicalGroupId);
+    }
+
+    // Determine batch name for Classroom (e.g. "Batch B" -> "B", or "B" -> "B")
+    let classBatch = teachingGroup.name.replace(/^batch\s*/i, '').trim() || teachingGroup.name.trim();
+    if (!classBatch) classBatch = 'A';
+
+    let labBatch = null;
+    if (type === 'lab') {
+      labBatch = practicalGroup ? practicalGroup.name.trim() : (alloc.labBatchName || '1');
+    }
+
+    // 1. Ensure or update Classroom
+    let classroom = await Classroom.findOne({
+      courseId,
+      session: session.name,
+      classBatch: classBatch.toUpperCase(),
+      type,
+      labBatch: type === 'lab' ? labBatch : null,
+    });
+
+    if (!classroom) {
+      classroom = await Classroom.create({
+        courseId,
+        professorId: facultyId,
+        session: session.name,
+        classBatch: classBatch.toUpperCase(),
+        type,
+        labBatch: type === 'lab' ? labBatch : null,
+      });
+    } else {
+      if (classroom.professorId.toString() !== facultyId.toString()) {
+        classroom.professorId = facultyId;
+        await classroom.save();
+      }
+    }
+
+    // 2. Upsert FacultyAllocation record
+    const filter = {
+      academicSessionId,
+      programId,
+      academicPeriodId,
+      courseId,
+      teachingGroupId,
+      type,
+      practicalGroupId: practicalGroupId || null,
+    };
+
+    let allocationDoc = await FacultyAllocation.findOne(filter);
+    if (!allocationDoc) {
+      allocationDoc = await FacultyAllocation.create({
+        ...filter,
+        facultyId,
+        classroomId: classroom._id,
+      });
+    } else {
+      allocationDoc.facultyId = facultyId;
+      allocationDoc.classroomId = classroom._id;
+      await allocationDoc.save();
+    }
+
+    savedResults.push(allocationDoc);
+  }
+
+  await logAudit({
+    actor: req.user,
+    action: 'FACULTY_ALLOCATED_TO_BATCHES',
+    entity: 'FacultyAllocation',
+    entityId: session._id,
+    metadata: { programId, academicPeriodId, count: savedResults.length }
+  });
+
+  res.status(200).json(successResponse(savedResults, `Successfully allocated faculty to ${savedResults.length} batch/lab group(s)`));
+});
+
 module.exports = {
   getInstitutions,
   createInstitution,
@@ -504,5 +1127,15 @@ module.exports = {
   getCourseOfferings,
   createCourseOffering,
   enrollStudent,
+  getBatchStudents,
+  promoteBatch,
   rolloverSession,
+  getCurriculum,
+  addCurriculumSubject,
+  updateCurriculumSubject,
+  deleteCurriculumSubject,
+  syncCurriculumToOfferings,
+  getFaculty,
+  getFacultyAllocations,
+  saveFacultyAllocations,
 };

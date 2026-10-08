@@ -5,7 +5,7 @@ import AdminLayoutComponent from '@/components/AdminLayout';
 
 export default function AdminRouteLayout({ children }) {
   return (
-    <ProtectedRoute role="professor">
+    <ProtectedRoute role={['admin', 'professor', 'teacher']}>
       <AdminLayoutComponent>
         {children}
       </AdminLayoutComponent>

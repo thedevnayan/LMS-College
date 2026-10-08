@@ -26,7 +26,7 @@ const getAccessDetails = async (moduleId, user) => {
     if (!enrollment) {
       throw new ApiError(403, 'FORBIDDEN', 'Not enrolled in this course');
     }
-  } else if (!isOwner) {
+  } else if (!isOwner && user.role !== 'admin') {
     throw new ApiError(403, 'FORBIDDEN', 'Not authorized');
   }
 
@@ -119,7 +119,7 @@ const getQuizById = asyncHandler(async (req, res, next) => {
 
   if (req.user.role === 'student') {
     if (!quiz.published) return next(new ApiError(403, 'FORBIDDEN', 'Quiz not published'));
-    
+
     if (quiz.batchIds && quiz.batchIds.length > 0) {
       if (!enrollment.batchId || !quiz.batchIds.some(b => b.toString() === enrollment.batchId.toString())) {
         return next(new ApiError(403, 'FORBIDDEN', 'Quiz is not available for your batch'));

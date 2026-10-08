@@ -358,6 +358,79 @@ async function runMigration() {
     }
   }
 
+  // 10b. Ensure ALL existing students without enrollments are enrolled to prevent education gaps
+  const allStudents = await User.find({ role: 'student' });
+  console.log(`[Migration] Checking all ${allStudents.length} students for complete academic coverage...`);
+
+  const defaultBatch = await TeachingGroup.findOne({
+    academicSessionId: session2627._id,
+    programId: program._id,
+    academicPeriodId: sem1._id,
+    name: 'Batch A',
+  });
+
+  const defaultOffering = await CourseOffering.findOne({
+    academicSessionId: session2627._id,
+    programId: program._id,
+    academicPeriodId: sem1._id,
+  });
+
+  for (const s of allStudents) {
+    const existingEnr = await StudentEnrollment.findOne({ studentId: s._id });
+    if (!existingEnr) {
+      // Check if student has submissions in any classroom
+      const sub = await Submission.findOne({ studentId: s._id }).populate({
+        path: 'assignmentId',
+        populate: { path: 'classroomId' }
+      });
+
+      let targetTg = defaultBatch;
+      let targetPg = null;
+
+      if (sub && sub.assignmentId && sub.assignmentId.classroomId) {
+        const cls = sub.assignmentId.classroomId;
+        const tgFound = await TeachingGroup.findOne({
+          academicSessionId: session2627._id,
+          name: `Batch ${cls.classBatch || 'A'}`,
+        });
+        if (tgFound) targetTg = tgFound;
+
+        if (cls.labBatch) {
+          targetPg = await PracticalGroup.findOne({
+            teachingGroupId: targetTg._id,
+            name: `Practical ${cls.labBatch}`,
+          });
+        }
+      }
+
+      if (targetTg) {
+        const newSe = await StudentEnrollment.create({
+          studentId: s._id,
+          institutionId: institution._id,
+          programId: program._id,
+          cohortId: cohort._id,
+          academicSessionId: session2627._id,
+          academicPeriodId: sem1._id,
+          teachingGroupId: targetTg._id,
+          status: 'Active',
+          enrolledAt: new Date(),
+        });
+        console.log(`[Migration] Auto-enrolled student '${s.name}' (${s.email}) into ${program.code} Sem 1 ${targetTg.name}`);
+
+        if (defaultOffering) {
+          await CourseMembership.create({
+            studentEnrollmentId: newSe._id,
+            studentId: s._id,
+            courseOfferingId: defaultOffering._id,
+            teachingGroupId: targetTg._id,
+            practicalGroupId: targetPg ? targetPg._id : null,
+            status: 'Enrolled',
+          });
+        }
+      }
+    }
+  }
+
   // 11. Verification Counts
   const counts = {
     institutions: await Institution.countDocuments(),

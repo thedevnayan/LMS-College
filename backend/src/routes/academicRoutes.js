@@ -43,6 +43,12 @@ router.route('/batches')
   .get(academicController.getTeachingGroups)
   .post(authorize('admin', 'professor'), academicController.createTeachingGroup);
 
+router.route('/batches/:batchId/students')
+  .get(academicController.getBatchStudents);
+
+router.route('/promote-batch')
+  .post(authorize('admin'), academicController.promoteBatch);
+
 // Practical Groups
 router.route('/practical-groups')
   .post(authorize('admin', 'professor'), academicController.createPracticalGroup);
@@ -59,5 +65,26 @@ router.route('/enroll')
 // Session Rollover & Promotion
 router.route('/rollover')
   .post(authorize('admin'), academicController.rolloverSession);
+
+// Semester Curriculum Management
+router.route('/curriculum')
+  .get(academicController.getCurriculum)
+  .post(authorize('admin'), academicController.addCurriculumSubject);
+
+router.route('/curriculum/sync-offerings')
+  .post(authorize('admin'), academicController.syncCurriculumToOfferings);
+
+router.route('/curriculum/:id')
+  .patch(authorize('admin'), academicController.updateCurriculumSubject)
+  .delete(authorize('admin'), academicController.deleteCurriculumSubject);
+
+// Faculty / Instructors List
+router.route('/faculty')
+  .get(academicController.getFaculty);
+
+// Batch & Lab Faculty Allocations
+router.route('/faculty-allocations')
+  .get(academicController.getFacultyAllocations)
+  .post(authorize('admin'), academicController.saveFacultyAllocations);
 
 module.exports = router;

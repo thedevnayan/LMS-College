@@ -153,7 +153,7 @@ export default function AssignmentsList() {
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <Link
-                    to={`/admin/assignments/${assignment._id}/report`}
+                    href={`/admin/assignments/${assignment._id}/report`}
                     style={{
                       padding: '8px 12px',
                       borderRadius: '8px',

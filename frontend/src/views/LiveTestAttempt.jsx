@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { testsAPI, codeAPI } from '@/services/api';
+import { testsAPI, codeAPI, SOCKET_URL } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { io } from 'socket.io-client';
+import { toast } from 'sonner';
 import { Clock, CheckSquare, AlertTriangle, WifiOff, Wifi, Play, UploadCloud } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 
@@ -57,7 +58,7 @@ export default function LiveTestAttempt() {
 
         if (attempt) {
           setScore(attempt.score || 0);
-          setCompleted(attempt.status === 'completed');
+          setCompleted(attempt.status === 'completed' || testData.liveStatus === 'ended');
 
           const map = {};
           (attempt.answers || []).forEach(a => {
@@ -107,7 +108,7 @@ export default function LiveTestAttempt() {
   useEffect(() => {
     if (!user || !testId || loading) return;
 
-    const newSocket = io('http://localhost:5000', {
+    const newSocket = io(SOCKET_URL, {
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
@@ -127,6 +128,25 @@ export default function LiveTestAttempt() {
 
     newSocket.on('disconnect', () => {
       setConnected(false);
+    });
+
+    newSocket.on('test_started', () => {
+      setTest(prev => ({ ...prev, liveStatus: 'in-progress' }));
+    });
+
+    newSocket.on('test_ended', () => {
+      setTest(prev => ({ ...prev, liveStatus: 'ended' }));
+      handleCompleteTest();
+      toast.info('The teacher has ended the test.');
+    });
+
+    newSocket.on('student_answered', (data) => {
+      if (data.userId.toString() === user._id.toString()) {
+        setScore(data.currentScore);
+        if (data.points > 0 && test?.testType === 'live-fastest-finger') {
+          toast.success(`You earned ${data.points} points!`, { style: { fontWeight: 800 } });
+        }
+      }
     });
 
     newSocket.on('go_next_question', (data) => {
@@ -155,29 +175,19 @@ export default function LiveTestAttempt() {
     const currentQ = questions[currentQuestionIndex];
     if (!currentQ || answeredMap[currentQ._id] !== undefined) return;
 
-    const isCorrect = optionIndex === currentQ.correctOptionIndex; 
-    let pointsAwarded = 0;
-    
-    if (isCorrect) {
-      pointsAwarded = test.testType === 'live-fastest-finger' ? 10 : (currentQ.points || 1);
-    }
-
-    const newScore = score + pointsAwarded;
-    setScore(newScore);
+    // Let the socket handle score increment natively, we just optimistically update UI for the option
     setAnsweredMap(prev => ({ ...prev, [currentQ._id]: optionIndex }));
 
     socket.emit('submit_answer', {
       testId,
       userId: user._id,
       userName: user.name,
+      role: 'student',
       questionId: currentQ._id,
-      selectedOption: optionIndex,
-      isCorrect,
-      points: pointsAwarded,
-      currentScore: newScore
+      selectedOption: optionIndex
     });
 
-    autoAdvance(newScore);
+    autoAdvance();
   };
 
   const handleCodeRun = async () => {
@@ -233,14 +243,12 @@ export default function LiveTestAttempt() {
           testId,
           userId: user._id,
           userName: user.name,
+          role: 'student',
           questionId: currentQ._id,
-          isCorrect,
-          points: pointsAwarded,
-          currentScore: newScore,
           codingSourceCode: code
         });
 
-        setTimeout(() => autoAdvance(newScore), 2000);
+        setTimeout(() => autoAdvance(), 2000);
       }
     } catch (err) {
       setRunResult({ type: 'error', error: err.message });
@@ -249,28 +257,26 @@ export default function LiveTestAttempt() {
     }
   };
 
-  const autoAdvance = (passedScore) => {
+  const autoAdvance = () => {
     if (test.testType === 'time-based' || test.testType === 'standard') {
       if (currentQuestionIndex < questions.length - 1) {
         setCurrentQuestionIndex(prev => prev + 1);
       } else {
-        handleCompleteTest(passedScore);
+        handleCompleteTest();
       }
     }
   };
 
-  const handleCompleteTest = (overrideScore) => {
+  const handleCompleteTest = () => {
     if (completed) return;
     setCompleted(true);
-    
-    const finalScore = overrideScore !== undefined && typeof overrideScore === 'number' ? overrideScore : score;
     
     if (socket) {
       socket.emit('test_completed', {
         testId,
         userId: user._id,
         userName: user.name,
-        finalScore
+        role: 'student'
       });
     }
   };

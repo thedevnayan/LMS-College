@@ -3,13 +3,15 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { testsAPI } from '@/services/api';
-import { PenTool, Plus, Trash2, Clock, Zap, RefreshCcw, FileCode, BarChart2 } from 'lucide-react';
+import { PenTool, Plus, Trash2, Clock, Zap, RefreshCcw, FileCode, BarChart2, QrCode, X } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { QRCodeSVG } from 'qrcode.react';
 
 export default function TestsList() {
   const router = useRouter();
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showQRForTest, setShowQRForTest] = useState(null);
 
   useEffect(() => {
     fetchTests();
@@ -101,6 +103,29 @@ export default function TestsList() {
         </motion.button>
       </div>
 
+      {/* QR Code Modal */}
+      {showQRForTest && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ backgroundColor: 'var(--color-paper-white)', padding: '32px', borderRadius: '24px', border: '2px solid var(--color-ink)', boxShadow: '8px 8px 0px var(--color-ink)', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h3 style={{ fontSize: '20px', margin: 0 }}>Guest Join QR</h3>
+              <button onClick={() => setShowQRForTest(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
+            </div>
+            <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '16px', display: 'inline-block', marginBottom: '24px', border: '2px solid var(--color-ink)' }}>
+              <QRCodeSVG 
+                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/test/guest-join/${showQRForTest.sessionToken}`} 
+                size={250} 
+                level="M" 
+                includeMargin={true}
+              />
+            </div>
+            <p style={{ fontSize: '14px', color: 'var(--color-fog)', wordBreak: 'break-all' }}>
+              {`${typeof window !== 'undefined' ? window.location.origin : ''}/test/guest-join/${showQRForTest.sessionToken}`}
+            </p>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}>
           <div className="admin-spinner" />
@@ -163,6 +188,18 @@ export default function TestsList() {
                     Host Live
                   </button>
                 )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowQRForTest(test);
+                  }}
+                  title="Guest QR Link"
+                  style={{ padding: '8px 12px', borderRadius: '8px', border: '2px solid var(--color-fog)', backgroundColor: 'transparent', color: 'var(--color-fog)', cursor: 'pointer' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#10b981'; e.currentTarget.style.color = '#10b981'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-fog)'; e.currentTarget.style.color = 'var(--color-fog)'; }}
+                >
+                  <QrCode size={16} />
+                </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

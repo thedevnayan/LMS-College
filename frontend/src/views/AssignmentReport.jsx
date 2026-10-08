@@ -93,7 +93,7 @@ export default function AssignmentReport() {
     <div style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '60px', paddingTop: '32px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
         <Link 
-          to="/admin/assignments" 
+          href="/admin/assignments" 
           className="admin-btn-outline"
           style={{ 
             display: 'flex', alignItems: 'center', gap: '8px', 

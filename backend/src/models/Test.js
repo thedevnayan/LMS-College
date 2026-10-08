@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { v4: uuidv4 } = require('uuid');
 
 const testCaseSchema = new mongoose.Schema({
   input: { type: String, required: true },
@@ -99,6 +100,20 @@ const testSchema = new mongoose.Schema(
       type: Number,
       default: 0, 
     },
+    // New additions for secure QR sessions and server authoritative timers
+    sessionToken: {
+      type: String,
+      sparse: true,
+      unique: true
+    },
+    startTime: {
+      type: Date,
+      default: null,
+    },
+    endTime: {
+      type: Date,
+      default: null,
+    },
     // Server-side live test state (survives disconnections)
     currentQuestionIndex: {
       type: Number,
@@ -109,11 +124,22 @@ const testSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    // Track who has answered the current question in fastest-finger to prevent double answers
+    answeredCurrentQuestion: [{
+      type: mongoose.Schema.Types.Mixed, // Can be ObjectId or String(guestId)
+    }],
     questions: [questionSchema],
   },
   {
     timestamps: true,
   }
 );
+
+// Auto-generate sessionToken before first save
+testSchema.pre('validate', function () {
+  if (!this.sessionToken) {
+    this.sessionToken = uuidv4();
+  }
+});
 
 module.exports = mongoose.model('Test', testSchema);

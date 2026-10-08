@@ -22,7 +22,7 @@ const getAccessDetails = async (classroomId, user) => {
     if (!enrollment) {
       throw new ApiError(403, 'FORBIDDEN', 'Not enrolled in this course');
     }
-  } else if (!isOwner) {
+  } else if (!isOwner && user.role !== 'admin') {
     throw new ApiError(403, 'FORBIDDEN', 'Not authorized');
   }
 
@@ -64,11 +64,13 @@ const getMaterials = asyncHandler(async (req, res, next) => {
  * @access  Professor (All materials for all their classrooms)
  */
 const getAllMaterialsForProfessor = asyncHandler(async (req, res, next) => {
-  if (req.user.role !== 'professor') {
-    return next(new ApiError(403, 'FORBIDDEN', 'Only professors can view all materials'));
+  if (!['professor', 'admin', 'teacher'].includes(req.user.role)) {
+    return next(new ApiError(403, 'FORBIDDEN', 'Only faculty and administrators can view materials'));
   }
 
-  const classrooms = await Classroom.find({ professorId: req.user._id }).select('_id');
+  const classrooms = req.user.role === 'admin'
+    ? await Classroom.find().select('_id')
+    : await Classroom.find({ professorId: req.user._id }).select('_id');
   const classroomIds = classrooms.map(c => c._id);
 
   const materials = await Material.find({ classroomId: { $in: classroomIds } })
@@ -190,6 +192,41 @@ const deleteMaterial = asyncHandler(async (req, res, next) => {
   res.status(200).json(successResponse({}, 'Material deleted'));
 });
 
+/**
+ * @route   POST /api/materials/:id/progress
+ * @access  Student
+ */
+const markProgress = asyncHandler(async (req, res, next) => {
+  const material = await Material.findById(req.params.id);
+  if (!material) return next(new ApiError(404, 'NOT_FOUND', 'Material not found'));
+
+  const { course } = await getAccessDetails(material.classroomId, req.user);
+
+  if (req.user.role !== 'student') {
+    return next(new ApiError(403, 'FORBIDDEN', 'Only students can mark progress'));
+  }
+
+  const { completed } = req.body;
+
+  let progress = await MaterialProgress.findOne({
+    studentId: req.user._id,
+    materialId: material._id,
+  });
+
+  if (!progress) {
+    progress = new MaterialProgress({
+      studentId: req.user._id,
+      materialId: material._id,
+      courseId: course._id,
+    });
+  }
+
+  progress.completed = completed;
+  await progress.save();
+
+  res.status(200).json(successResponse(progress));
+});
+
 module.exports = {
   getMaterials,
   getAllMaterialsForProfessor,
@@ -197,4 +234,5 @@ module.exports = {
   getMaterialById,
   updateMaterial,
   deleteMaterial,
+  markProgress,
 };

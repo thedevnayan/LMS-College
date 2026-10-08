@@ -11,8 +11,16 @@ export default function ProtectedRoute({ children, role }) {
   useEffect(() => {
     if (!loading && !isAuthenticated) {
       router.replace('/admin/login');
-    } else if (!loading && role && user?.role !== role) {
-      router.replace('/');
+    } else if (!loading && role) {
+      const allowedRoles = Array.isArray(role) ? role : [role];
+      const isFacultyRoute = allowedRoles.some((r) => ['admin', 'professor', 'teacher'].includes(r));
+      if (isFacultyRoute) {
+        if (!['admin', 'professor', 'teacher'].includes(user?.role)) {
+          router.replace('/admin/login');
+        }
+      } else if (!allowedRoles.includes(user?.role)) {
+        router.replace('/');
+      }
     }
   }, [loading, isAuthenticated, user, role, router]);
 
@@ -23,7 +31,7 @@ export default function ProtectedRoute({ children, role }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'var(--color-charcoal)',
+        backgroundColor: 'var(--color-warm-linen)',
       }}>
         <div className="admin-spinner" />
       </div>
@@ -34,8 +42,14 @@ export default function ProtectedRoute({ children, role }) {
     return null;
   }
 
-  if (role && user.role !== role) {
-    return null;
+  if (role) {
+    const allowedRoles = Array.isArray(role) ? role : [role];
+    const isFacultyRoute = allowedRoles.some((r) => ['admin', 'professor', 'teacher'].includes(r));
+    if (isFacultyRoute) {
+      if (!['admin', 'professor', 'teacher'].includes(user?.role)) return null;
+    } else if (!allowedRoles.includes(user?.role)) {
+      return null;
+    }
   }
 
   return children;

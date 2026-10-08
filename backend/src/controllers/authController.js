@@ -80,6 +80,34 @@ const login = asyncHandler(async (req, res, next) => {
     return next(new ApiError(401, 'UNAUTHORIZED', 'Account is deactivated'));
   }
 
+  // Check if student belongs to a batch that has login revoked
+  if (user.role === 'student') {
+    const Enrollment = require('../models/Enrollment');
+    const BatchJoinCode = require('../models/BatchJoinCode');
+    
+    const enrollments = await Enrollment.find({ studentId: user._id }).populate('classroomId');
+    
+    const batchCombos = new Set();
+    enrollments.forEach(enr => {
+      if (enr.classroomId && enr.classroomId.session && enr.classroomId.classBatch) {
+        batchCombos.add(`${enr.classroomId.session}__${enr.classroomId.classBatch}`);
+      }
+    });
+
+    for (const combo of batchCombos) {
+      const [session, classBatch] = combo.split('__');
+      const masterBatchCode = await BatchJoinCode.findOne({
+        session,
+        classBatch,
+        labBatch: null,
+      });
+
+      if (masterBatchCode && masterBatchCode.loginEnabled === false) {
+        return next(new ApiError(403, 'LOGIN_REVOKED', `Login access has been revoked for your batch (${classBatch}). Please contact administration.`));
+      }
+    }
+  }
+
   const { accessToken, refreshToken } = generateTokens(user._id);
 
   // Add new refresh token to array (allow multi-device)

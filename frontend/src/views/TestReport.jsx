@@ -3,18 +3,33 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { testsAPI } from '@/services/api';
+import { useAuth } from '@/context/AuthContext';
 import { ArrowLeft, Users, TrendingUp, Trophy, AlertCircle, ChevronDown, ChevronUp, CheckCircle, XCircle } from 'lucide-react';
+
+const StatCard = ({ title, value, icon, color }) => (
+  <div style={{ padding: '24px', backgroundColor: 'var(--color-paper-white)', borderRadius: '16px', border: '2px solid var(--color-ink)', boxShadow: '4px 4px 0px var(--color-ink)', display: 'flex', alignItems: 'center', gap: '16px' }}>
+    <div style={{ padding: '16px', backgroundColor: color, borderRadius: '12px', border: '2px solid var(--color-ink)', color: 'var(--color-ink)' }}>
+      {icon}
+    </div>
+    <div>
+      <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--color-fog)' }}>{title}</p>
+      <p style={{ margin: 0, fontSize: '28px', fontWeight: 900, color: 'var(--color-ink)' }}>{value}</p>
+    </div>
+  </div>
+);
 
 export default function TestReport() {
   const { id } = useParams();
   const router = useRouter();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expandedAttemptId, setExpandedAttemptId] = useState(null);
 
   useEffect(() => {
+    if (authLoading || !isAuthenticated) return;
     fetchReport();
-  }, [id]);
+  }, [id, isAuthenticated, authLoading]);
 
   const fetchReport = async () => {
     try {
@@ -29,6 +44,7 @@ export default function TestReport() {
     }
   };
 
+
   if (loading) {
     return <div className="admin-spinner" style={{ margin: '100px auto' }} />;
   }
@@ -38,18 +54,6 @@ export default function TestReport() {
   }
 
   const { test, stats, attempts } = data;
-
-  const StatCard = ({ title, value, icon, color }) => (
-    <div style={{ padding: '24px', backgroundColor: 'var(--color-paper-white)', borderRadius: '16px', border: '2px solid var(--color-ink)', boxShadow: '4px 4px 0px var(--color-ink)', display: 'flex', alignItems: 'center', gap: '16px' }}>
-      <div style={{ padding: '16px', backgroundColor: color, borderRadius: '12px', border: '2px solid var(--color-ink)', color: 'var(--color-ink)' }}>
-        {icon}
-      </div>
-      <div>
-        <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--color-fog)' }}>{title}</p>
-        <p style={{ margin: 0, fontSize: '28px', fontWeight: 900, color: 'var(--color-ink)' }}>{value}</p>
-      </div>
-    </div>
-  );
 
   return (
     <div style={{ padding: '32px', maxWidth: '1200px', margin: '0 auto' }}>

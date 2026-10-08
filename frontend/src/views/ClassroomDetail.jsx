@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { classroomsAPI } from '@/services/api';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   ArrowLeft, Copy, Check, Users, RefreshCw, Trash2,
-  FlaskConical, BookMarked, Calendar, AlertCircle, UserCircle
+  FlaskConical, BookMarked, Calendar, AlertCircle, UserCircle, Download
 } from 'lucide-react';
 
 export default function ClassroomDetail() {
@@ -49,11 +50,38 @@ export default function ClassroomDetail() {
     }
   };
 
-  const copyCode = () => {
+  const getEnrollUrl = () => {
+    if (!classroom) return '';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${origin}/enroll/${classroom.enrollmentToken}`;
+  };
+
+  const copyEnrollUrl = () => {
     if (!classroom) return;
-    navigator.clipboard.writeText(classroom.joinCode);
+    navigator.clipboard.writeText(getEnrollUrl());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const downloadQR = () => {
+    const svgEl = document.querySelector('#classroom-qr-code svg');
+    if (!svgEl) return;
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width * 2;
+      canvas.height = img.height * 2;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const link = document.createElement('a');
+      link.download = `qr-enroll-${classroom.classBatch || 'class'}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    };
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
   };
 
   const handleRegenerate = async () => {
@@ -61,10 +89,10 @@ export default function ClassroomDetail() {
     try {
       const res = await classroomsAPI.regenerateCode(id);
       if (res.success) {
-        setClassroom((prev) => ({ ...prev, joinCode: res.data.joinCode }));
+        setClassroom((prev) => ({ ...prev, joinCode: res.data.joinCode, enrollmentToken: res.data.enrollmentToken }));
       }
     } catch (err) {
-      console.error('Failed to regenerate code:', err);
+      console.error('Failed to regenerate QR:', err);
     } finally {
       setRegenerating(false);
     }
@@ -207,7 +235,7 @@ export default function ClassroomDetail() {
         </button>
       </motion.div>
 
-      {/* Join Code Card */}
+      {/* QR Code Card */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -222,22 +250,29 @@ export default function ClassroomDetail() {
         }}
       >
         <div style={{ color: 'var(--color-fog)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '16px' }}>
-          Join Code
+          Student Enrollment QR
         </div>
-        <div style={{
-          fontFamily: 'monospace',
-          fontSize: '56px',
-          letterSpacing: '16px',
-          color: 'var(--color-ink)',
-          fontWeight: 700,
+        <div id="classroom-qr-code" style={{
+          display: 'inline-block',
+          padding: '16px',
+          backgroundColor: '#fff',
+          borderRadius: '16px',
+          border: '1px solid var(--color-stone)',
           marginBottom: '20px',
         }}>
-          {classroom.joinCode}
+          <QRCodeSVG
+            value={getEnrollUrl()}
+            size={200}
+            level="M"
+            includeMargin={true}
+            bgColor="#ffffff"
+            fgColor="#000000"
+          />
         </div>
-        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
           <motion.button
             whileTap={{ scale: 0.95 }}
-            onClick={copyCode}
+            onClick={copyEnrollUrl}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -245,14 +280,36 @@ export default function ClassroomDetail() {
               padding: '10px 18px',
               borderRadius: '8px',
               border: '1px solid var(--color-ink)',
-              backgroundColor: 'var(--color-pure-white)',
+              backgroundColor: copied ? 'var(--color-lime-burst)' : 'var(--color-pure-white)',
               color: 'var(--color-ink)',
               cursor: 'pointer',
               fontSize: '13px',
+              fontWeight: 600,
+              transition: 'background-color 0.2s ease',
             }}
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
-            {copied ? 'Copied!' : 'Copy Code'}
+            {copied ? 'Copied!' : 'Copy Link'}
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={downloadQR}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '10px 18px',
+              borderRadius: '8px',
+              border: '1px solid var(--color-ink)',
+              backgroundColor: 'var(--color-sun-yellow)',
+              color: 'var(--color-ink)',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+            }}
+          >
+            <Download size={14} />
+            Save QR
           </motion.button>
           <motion.button
             whileTap={{ scale: 0.95 }}
@@ -272,7 +329,7 @@ export default function ClassroomDetail() {
             }}
           >
             <RefreshCw size={14} className={regenerating ? 'admin-spin' : ''} />
-            Regenerate
+            Regenerate QR
           </motion.button>
         </div>
       </motion.div>

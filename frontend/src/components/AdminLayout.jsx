@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard, BookOpen, Plus, LogOut, Menu, X, ChevronRight, GraduationCap, FileText, Zap, Users,
-  BarChart3, Layers, RefreshCw, Calendar, Sparkles
+  BarChart3, Layers, RefreshCw, Calendar, Sparkles, BookMarked
 } from 'lucide-react';
 import { useAcademic } from '@/context/AcademicContext';
 
@@ -27,7 +27,8 @@ export default function AdminLayout({ children }) {
     { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/admin/mis', icon: BarChart3, label: 'College MIS' },
     { to: '/admin/academic', icon: Layers, label: 'Academic Setup' },
-    { to: '/admin/rollover', icon: RefreshCw, label: 'Session Rollover' },
+    { to: '/admin/curriculum', icon: BookMarked, label: 'Curriculum Setup' },
+    { to: '/admin/rollover', icon: RefreshCw, label: 'Batch Promotion' },
     { to: '/admin/classrooms/new', icon: Plus, label: 'Create Class' },
     { to: '/admin/assignments', icon: BookOpen, label: 'Assignments' },
     { to: '/admin/materials', icon: FileText, label: 'Materials' },

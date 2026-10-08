@@ -56,7 +56,9 @@ export function AuthProvider({ children }) {
     login,
     logout,
     isAuthenticated: !!user,
-    isProfessor: user?.role === 'professor',
+    isAdmin: user?.role === 'admin',
+    isFaculty: ['admin', 'professor', 'teacher'].includes(user?.role),
+    isProfessor: ['admin', 'professor', 'teacher'].includes(user?.role),
     isStudent: user?.role === 'student',
   };
 

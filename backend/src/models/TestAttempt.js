@@ -25,7 +25,19 @@ const testAttemptSchema = new mongoose.Schema(
     studentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: false, // Optional for guests
+    },
+    isGuest: {
+      type: Boolean,
+      default: false,
+    },
+    guestId: {
+      type: String,
+      required: false,
+    },
+    guestName: {
+      type: String,
+      required: false,
     },
     status: {
       type: String,
@@ -50,7 +62,16 @@ const testAttemptSchema = new mongoose.Schema(
   }
 );
 
-// One attempt per student per test
-testAttemptSchema.index({ testId: 1, studentId: 1 }, { unique: true });
+// Unique index for students
+testAttemptSchema.index(
+  { testId: 1, studentId: 1 }, 
+  { unique: true, partialFilterExpression: { studentId: { $type: 'objectId' } } }
+);
+
+// Unique index for guests
+testAttemptSchema.index(
+  { testId: 1, guestId: 1 }, 
+  { unique: true, partialFilterExpression: { guestId: { $type: 'string' } } }
+);
 
 module.exports = mongoose.model('TestAttempt', testAttemptSchema);

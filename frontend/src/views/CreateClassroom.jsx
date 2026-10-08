@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { classroomsAPI, coursesAPI } from '@/services/api';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   ArrowLeft, Check, Copy, BookOpen, FlaskConical, BookMarked,
-  Plus, AlertCircle, Sparkles
+  Plus, AlertCircle, Sparkles, Download, QrCode
 } from 'lucide-react';
 
 // Generate session options: current and next 2 academic years
@@ -171,7 +172,7 @@ export default function CreateClassroom() {
           Create a Classroom
         </h1>
         <p style={{ color: 'var(--color-fog)', fontSize: '14px' }}>
-          Set up a new class — a unique 6-digit code will be generated for students to join
+          Set up a new class — a QR code will be generated for students to scan and enroll
         </p>
       </motion.div>
 
@@ -425,7 +426,7 @@ export default function CreateClassroom() {
           ) : (
             <>
               <Sparkles size={18} />
-              Create Classroom & Generate Code
+              Create Classroom & Generate QR
             </>
           )}
         </motion.button>
@@ -482,11 +483,39 @@ function TypeToggle({ active, onClick, icon: Icon, label, color }) {
 
 function SuccessScreen({ classrooms, navigate }) {
   const [copiedIndex, setCopiedIndex] = useState(null);
+  const router = useRouter();
 
-  const copyCode = (code, index) => {
-    navigator.clipboard.writeText(code);
+  const getEnrollUrl = (classroom) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${origin}/enroll/${classroom.enrollmentToken}`;
+  };
+
+  const copyUrl = (classroom, index) => {
+    navigator.clipboard.writeText(getEnrollUrl(classroom));
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const downloadQR = (classroom, index) => {
+    const svgEl = document.querySelector(`#qr-code-${index} svg`);
+    if (!svgEl) return;
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width * 2;
+      canvas.height = img.height * 2;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const link = document.createElement('a');
+      const label = classroom.labBatch || classroom.classBatch || 'classroom';
+      link.download = `qr-enroll-${label}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    };
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
   };
 
   const isMultiple = classrooms.length > 1;
@@ -496,7 +525,7 @@ function SuccessScreen({ classrooms, navigate }) {
   const classBatch = classrooms[0]?.classBatch;
 
   return (
-    <div style={{ padding: '32px', maxWidth: '680px', margin: '0 auto' }}>
+    <div style={{ padding: '32px', maxWidth: '720px', margin: '0 auto' }}>
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -533,7 +562,7 @@ function SuccessScreen({ classrooms, navigate }) {
           {isMultiple ? 'Classrooms Created!' : 'Classroom Created!'}
         </h2>
         <p style={{ color: 'var(--color-fog)', fontSize: '14px', marginBottom: '32px' }}>
-          Share {isMultiple ? 'these codes' : 'this code'} with your students to join
+          Share {isMultiple ? 'these QR codes' : 'this QR code'} with your students to scan and enroll
         </p>
 
         {/* Classroom details */}
@@ -554,8 +583,8 @@ function SuccessScreen({ classrooms, navigate }) {
           </span>
         </div>
 
-        {/* Big Join Codes */}
-        <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: isMultiple ? '1fr 1fr' : '1fr', marginBottom: '32px' }}>
+        {/* QR Codes */}
+        <div style={{ display: 'grid', gap: '20px', gridTemplateColumns: isMultiple ? '1fr 1fr' : '1fr', marginBottom: '32px' }}>
           {classrooms.map((c, i) => (
             <motion.div
               key={c._id}
@@ -563,7 +592,7 @@ function SuccessScreen({ classrooms, navigate }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 + (i * 0.1) }}
               style={{
-                padding: '24px',
+                padding: '28px 24px',
                 borderRadius: 'var(--radius-cards)',
                 backgroundColor: 'var(--color-pure-white)',
                 border: '1px solid var(--color-ink)',
@@ -574,53 +603,80 @@ function SuccessScreen({ classrooms, navigate }) {
               }}
             >
               {c.type === 'lab' && c.labBatch && (
-                <div style={{ 
-                  marginBottom: '12px', 
-                  color: '#ff4dd5', 
-                  fontWeight: 600, 
+                <div style={{
+                  marginBottom: '14px',
+                  color: '#ff4dd5',
+                  fontWeight: 600,
                   fontSize: '14px',
                   backgroundColor: 'rgba(255,77,213,0.12)',
                   padding: '4px 12px',
-                  borderRadius: '6px'
+                  borderRadius: '6px',
                 }}>
                   {c.labBatch}
                 </div>
               )}
-              <div style={{
-                fontFamily: 'monospace',
-                fontSize: isMultiple ? '36px' : '48px',
-                letterSpacing: isMultiple ? '8px' : '12px',
-                color: 'var(--color-ink)',
-                fontWeight: 700,
+              <div id={`qr-code-${i}`} style={{
+                padding: '12px',
+                backgroundColor: '#fff',
+                borderRadius: '12px',
                 marginBottom: '16px',
-                textAlign: 'center',
               }}>
-                {c.joinCode}
+                <QRCodeSVG
+                  value={getEnrollUrl(c)}
+                  size={isMultiple ? 160 : 200}
+                  level="M"
+                  includeMargin={true}
+                  bgColor="#ffffff"
+                  fgColor="#000000"
+                />
               </div>
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={() => copyCode(c.joinCode, i)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--color-ink)',
-                  backgroundColor: 'var(--color-paper-white)',
-                  color: 'var(--color-ink)',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                }}
-              >
-                {copiedIndex === i ? <Check size={14} /> : <Copy size={14} />}
-                {copiedIndex === i ? 'Copied!' : 'Copy Code'}
-              </motion.button>
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => copyUrl(c, i)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-ink)',
+                    backgroundColor: copiedIndex === i ? 'var(--color-lime-burst)' : 'var(--color-paper-white)',
+                    color: 'var(--color-ink)',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    transition: 'background-color 0.2s ease',
+                  }}
+                >
+                  {copiedIndex === i ? <Check size={13} /> : <Copy size={13} />}
+                  {copiedIndex === i ? 'Copied!' : 'Copy Link'}
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => downloadQR(c, i)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-ink)',
+                    backgroundColor: 'var(--color-sun-yellow)',
+                    color: 'var(--color-ink)',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                  }}
+                >
+                  <Download size={13} /> Save QR
+                </motion.button>
+              </div>
             </motion.div>
           ))}
         </div>
-
-
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>

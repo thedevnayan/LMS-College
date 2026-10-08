@@ -42,6 +42,14 @@ const studentEnrollmentSchema = new mongoose.Schema(
       enum: ['Active', 'Promoted', 'Completed', 'Detained', 'Dropped'],
       default: 'Active',
     },
+    educationGap: {
+      type: String,
+      default: 'None (Continuous Enrollment)',
+    },
+    academicNotes: {
+      type: String,
+      default: '',
+    },
     enrolledAt: {
       type: Date,
       default: Date.now,

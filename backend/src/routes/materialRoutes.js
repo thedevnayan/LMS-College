@@ -36,4 +36,6 @@ router.route('/:id')
   )
   .delete(authorize('professor'), materialController.deleteMaterial);
 
+router.post('/:id/progress', authorize('student'), materialController.markProgress);
+
 module.exports = router;

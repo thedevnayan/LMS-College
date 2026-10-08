@@ -2,11 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { testsAPI } from '@/services/api';
+import { testsAPI, SOCKET_URL } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { io } from 'socket.io-client';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
-import { PlayCircle, Users, Trophy, FastForward, CheckCircle2, WifiOff, Wifi } from 'lucide-react';
+import { PlayCircle, Users, Trophy, FastForward, CheckCircle2, WifiOff, Wifi, QrCode, X, Zap } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function LiveTestDashboard() {
   const { testId } = useParams();
@@ -22,6 +25,7 @@ export default function LiveTestDashboard() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [testStarted, setTestStarted] = useState(false);
   const [turnUserId, setTurnUserId] = useState(null);
+  const [showQR, setShowQR] = useState(false);
 
   // ── Fetch full live state from DB (survives refresh/disconnect) ──
   const restoreState = async () => {
@@ -60,7 +64,7 @@ export default function LiveTestDashboard() {
   useEffect(() => {
     if (!user || !testId) return;
 
-    const newSocket = io('http://localhost:5000', {
+    const newSocket = io(SOCKET_URL, {
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
@@ -106,6 +110,25 @@ export default function LiveTestDashboard() {
         }
         return s;
       }));
+
+      // Interactive Game-like Toasts
+      if (data.isCorrect) {
+        if (test?.testType === 'live-fastest-finger' && data.points > 0) {
+          toast.success(`🔥 FASTEST FINGER: ${data.userName} secured ${data.points} points!`, {
+            style: { backgroundColor: '#fff7ed', color: '#ea580c', border: '2px solid #ea580c', fontSize: '16px', fontWeight: 800 }
+          });
+        } else if (test?.testType === 'live-round-robin') {
+          toast.success(`✅ ${data.userName} answered correctly!`, {
+            style: { backgroundColor: '#f0fdf4', color: '#16a34a', border: '2px solid #16a34a', fontSize: '16px', fontWeight: 800 }
+          });
+        }
+      } else {
+        if (test?.testType === 'live-round-robin') {
+          toast.error(`❌ ${data.userName} missed the mark!`, {
+            style: { backgroundColor: '#fef2f2', color: '#dc2626', border: '2px solid #dc2626', fontSize: '16px', fontWeight: 800 }
+          });
+        }
+      }
     });
 
     newSocket.on('student_completed', (data) => {
@@ -118,7 +141,7 @@ export default function LiveTestDashboard() {
     });
 
     return () => newSocket.disconnect();
-  }, [testId, user]);
+  }, [testId, user, test?.testType]);
 
   const handleStartTest = async () => {
     try {
@@ -130,6 +153,9 @@ export default function LiveTestDashboard() {
         const randomStudent = students[Math.floor(Math.random() * students.length)];
         setTurnUserId(randomStudent.userId);
         socket.emit('next_question', { testId, nextQuestionIndex: 0, turnUserId: randomStudent.userId });
+        toast.info(`🎲 Randomly selected ${randomStudent.userName} to start!`, { style: { fontWeight: 800 } });
+      } else {
+        toast.success(`🏁 Test Started!`, { style: { fontWeight: 800 } });
       }
     } catch (err) {
       console.error(err);
@@ -145,6 +171,7 @@ export default function LiveTestDashboard() {
       const randomStudent = students[Math.floor(Math.random() * students.length)];
       nextTurn = randomStudent.userId;
       setTurnUserId(nextTurn);
+      toast.info(`🎲 It's ${randomStudent.userName}'s turn!`, { style: { fontWeight: 800 } });
     }
     
     socket.emit('next_question', { testId, nextQuestionIndex: nextIdx, turnUserId: nextTurn });
@@ -159,6 +186,29 @@ export default function LiveTestDashboard() {
 
   return (
     <div style={{ padding: '32px', maxWidth: '1200px', margin: '0 auto' }}>
+      
+      {/* QR Code Modal for Guest Join */}
+      {showQR && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ backgroundColor: 'var(--color-paper-white)', padding: '32px', borderRadius: '24px', border: '2px solid var(--color-ink)', boxShadow: '8px 8px 0px var(--color-ink)', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h3 style={{ fontSize: '20px', margin: 0 }}>Guest Join QR</h3>
+              <button onClick={() => setShowQR(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
+            </div>
+            <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '16px', display: 'inline-block', marginBottom: '24px', border: '2px solid var(--color-ink)' }}>
+              <QRCodeSVG 
+                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/test/guest-join/${test.sessionToken}`} 
+                size={250} 
+                level="M" 
+                includeMargin={true}
+              />
+            </div>
+            <p style={{ fontSize: '14px', color: 'var(--color-fog)', wordBreak: 'break-all' }}>
+              {`${typeof window !== 'undefined' ? window.location.origin : ''}/test/guest-join/${test.sessionToken}`}
+            </p>
+          </div>
+        </div>
+      )}
       
       {/* Connection status indicator */}
       <div style={{
@@ -187,6 +237,15 @@ export default function LiveTestDashboard() {
             <span style={{ color: 'var(--color-fog)', fontWeight: 600 }}>
               Join Code: <strong style={{ color: 'var(--color-ink)', fontSize: '20px', letterSpacing: '2px' }}>{test.joinCode || 'NONE'}</strong>
             </span>
+            {test.sessionToken && (
+              <button 
+                onClick={() => setShowQR(true)}
+                className="admin-btn-outline"
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', fontSize: '14px' }}
+              >
+                <QrCode size={16} /> Guest Link
+              </button>
+            )}
           </div>
         </div>
         
@@ -215,7 +274,7 @@ export default function LiveTestDashboard() {
               style={{ backgroundColor: '#fee2e2', color: '#991b1b', borderColor: '#991b1b' }}
               onClick={async () => {
                 await testsAPI.update(testId, { liveStatus: 'ended', status: 'completed' });
-                router.push('/admin/tests');
+                router.push(`/admin/tests/${testId}/report`);
               }}
             >
               End Test
@@ -240,9 +299,9 @@ export default function LiveTestDashboard() {
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-fog)', fontWeight: 600 }} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--color-fog)', fontWeight: 600 }} />
                     <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px', border: '2px solid var(--color-ink)', boxShadow: '4px 4px 0px var(--color-ink)', fontWeight: 700 }} />
-                    <Bar dataKey="score" radius={[8, 8, 0, 0]}>
+                    <Bar dataKey="score" radius={[8, 8, 0, 0]} animationDuration={1000} animationEasing="ease-out">
                       {chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : 'var(--color-ink)'} />
+                        <Cell key={`cell-${index}`} fill={index === 0 && entry.score > 0 ? '#fbbf24' : index === 1 && entry.score > 0 ? '#94a3b8' : index === 2 && entry.score > 0 ? '#b45309' : 'var(--color-ink)'} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -277,19 +336,28 @@ export default function LiveTestDashboard() {
           <h3 style={{ fontSize: '20px', color: 'var(--color-ink)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Users size={20} /> Students ({students.length})
           </h3>
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '8px' }}>
             {students.length === 0 ? (
               <p style={{ color: 'var(--color-fog)', textAlign: 'center', marginTop: '40px' }}>Waiting for students to join...</p>
             ) : (
-              students.map(s => (
-                <div key={s.userId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', backgroundColor: 'var(--color-warm-linen)', borderRadius: '12px', border: '1px solid var(--color-ink)' }}>
-                  <div style={{ fontWeight: 700, color: 'var(--color-ink)' }}>{s.userName}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontWeight: 800, color: '#10b981' }}>{s.score} pts</span>
-                    {s.completed && <CheckCircle2 size={16} color="#10b981" />}
-                  </div>
-                </div>
-              ))
+              <AnimatePresence>
+                {students.map(s => (
+                  <motion.div 
+                    key={s.userId} 
+                    layout
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', backgroundColor: 'var(--color-warm-linen)', borderRadius: '12px', border: '1px solid var(--color-ink)' }}
+                  >
+                    <div style={{ fontWeight: 700, color: 'var(--color-ink)' }}>{s.userName}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontWeight: 800, color: '#10b981' }}>{s.score} pts</span>
+                      {s.completed && <CheckCircle2 size={16} color="#10b981" />}
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             )}
           </div>
         </div>

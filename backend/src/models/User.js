@@ -45,6 +45,18 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true, // Defaulting to true for MVP since no email flow exists
     },
+    educationGap: {
+      type: String,
+      default: 'None (Continuous Enrollment)',
+    },
+    admissionYear: {
+      type: Number,
+      default: 2026,
+    },
+    qualification: {
+      type: String,
+      default: 'Higher Secondary / 10+2',
+    },
     resetPasswordToken: String,
     resetPasswordExpire: Date,
   },

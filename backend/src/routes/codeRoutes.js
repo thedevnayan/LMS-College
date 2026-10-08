@@ -4,7 +4,7 @@ const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.use(protect); // All routes require authentication
+// Routes can be used by both logged-in students and guests (QR)
 
 router.post('/run', runCode);
 router.post('/submit/:testId/:questionId', submitCode);

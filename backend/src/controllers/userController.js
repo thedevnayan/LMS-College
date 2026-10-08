@@ -55,7 +55,34 @@ const updateUser = asyncHandler(async (req, res, next) => {
   res.status(200).json(successResponse(user));
 });
 
+/**
+ * @route   POST /api/users
+ * @access  Admin only
+ */
+const createUser = asyncHandler(async (req, res, next) => {
+  const { name, email, password, role } = req.body;
+
+  if (req.user.role !== 'admin') {
+    return next(new ApiError(403, 'FORBIDDEN', 'Only admins can create users directly'));
+  }
+
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    return next(new ApiError(409, 'CONFLICT', 'User with this email already exists'));
+  }
+
+  const user = await User.create({
+    name,
+    email,
+    password,
+    role: role || 'teacher',
+  });
+
+  res.status(201).json(successResponse(user, 'User created successfully'));
+});
+
 module.exports = {
   getUserById,
   updateUser,
+  createUser,
 };
