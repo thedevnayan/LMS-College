@@ -240,7 +240,7 @@ export default function GuestLiveTestAttempt() {
         {connected ? 'Connected' : 'Reconnecting...'}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', padding: '24px', backgroundColor: 'var(--color-paper-white)', borderRadius: '24px', border: '2px solid var(--color-ink)' }}>
+      <div className="test-header-mobile" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', padding: '24px', backgroundColor: 'var(--color-paper-white)', borderRadius: '24px', border: '2px solid var(--color-ink)' }}>
         <div>
           <h2 style={{ fontSize: '24px', color: 'var(--color-ink)', marginBottom: '4px' }}>{test.title} (Guest)</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

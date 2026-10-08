@@ -325,7 +325,7 @@ export default function LiveTestAttempt() {
       </div>
 
       {/* Header bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', padding: '24px', backgroundColor: 'var(--color-paper-white)', borderRadius: '24px', border: '2px solid var(--color-ink)', boxShadow: '8px 8px 0px var(--color-ink)' }}>
+      <div className="test-header-mobile" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', padding: '24px', backgroundColor: 'var(--color-paper-white)', borderRadius: '24px', border: '2px solid var(--color-ink)', boxShadow: '8px 8px 0px var(--color-ink)' }}>
         <div>
           <h2 style={{ fontSize: '24px', color: 'var(--color-ink)', marginBottom: '4px' }}>{test.title}</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -351,7 +351,7 @@ export default function LiveTestAttempt() {
           <p style={{ color: '#3b82f6', fontSize: '16px' }}>Please wait until it is your turn to answer.</p>
         </div>
       ) : (
-        <div style={{ 
+        <div className="test-attempt-grid" style={{ 
           display: isCoding ? 'grid' : 'block', 
           gridTemplateColumns: isCoding ? '1fr 1fr' : '1fr', 
           gap: '32px' 
@@ -426,7 +426,7 @@ export default function LiveTestAttempt() {
 
           {/* Right Side: Monaco Editor (Only for coding) */}
           {isCoding && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '600px' }}>
+            <div className="test-editor-container" style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '600px' }}>
               
               <div style={{ flex: 1, backgroundColor: '#1e1e1e', borderRadius: '24px', border: '2px solid var(--color-ink)', boxShadow: '8px 8px 0px var(--color-ink)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '12px 20px', backgroundColor: '#2d2d2d', borderBottom: '1px solid #404040', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

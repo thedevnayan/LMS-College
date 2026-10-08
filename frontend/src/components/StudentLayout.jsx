@@ -91,7 +91,7 @@ export default function StudentLayout({ children }) {
 
   return (
     <StudentDataProvider value={{ classrooms, loadingClassrooms }}>
-      <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--color-warm-linen)' }}>
+      <div className="student-layout" style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--color-warm-linen)' }}>
         {/* No classrooms prompt — tells student to scan QR */}
         {needsToJoin && (
           <div style={{
@@ -137,7 +137,7 @@ export default function StudentLayout({ children }) {
         <Toaster position="bottom-right" richColors toastOptions={{ style: { padding: '16px', borderRadius: '12px', border: '2px solid var(--color-ink)', boxShadow: '4px 4px 0px var(--color-ink)' } }} />
 
         {/* Sidebar */}
-        <aside style={{
+        <aside className="student-sidebar" style={{
           width: '260px',
           backgroundColor: 'var(--color-paper-white)',
           borderRight: '2px solid var(--color-ink)',
@@ -182,7 +182,7 @@ export default function StudentLayout({ children }) {
 
 
           {/* User Profile & Logout */}
-          <div style={{ padding: '24px', borderTop: '2px solid var(--color-ink)' }}>
+          <div className="user-profile-sec" style={{ padding: '24px', borderTop: '2px solid var(--color-ink)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'var(--color-sun-yellow)', border: '2px solid var(--color-ink)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <User size={20} color="var(--color-ink)" />
@@ -205,7 +205,7 @@ export default function StudentLayout({ children }) {
         </aside>
 
         {/* Main Content Area */}
-        <main style={{ flex: 1, marginLeft: '260px', padding: '40px' }}>
+        <main className="student-main" style={{ flex: 1, marginLeft: '260px', padding: '40px' }}>
           {children}
         </main>
       </div>
