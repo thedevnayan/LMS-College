@@ -15,11 +15,9 @@ const academicSessionSchema = new mongoose.Schema(
     },
     startDate: {
       type: Date,
-      required: [true, 'Start date is required'],
     },
     endDate: {
       type: Date,
-      required: [true, 'End date is required'],
     },
     status: {
       type: String,

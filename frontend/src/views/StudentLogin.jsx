@@ -121,12 +121,7 @@ export default function StudentLogin() {
           </button>
         </form>
 
-        <div style={{ marginTop: '32px', textAlign: 'center', fontSize: '15px', color: 'var(--color-fog)' }}>
-          Don't have an account?{' '}
-          <Link href="/register" style={{ color: 'var(--color-ink)', fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: '4px' }}>
-            Register here
-          </Link>
-        </div>
+
       </div>
       
     </div>

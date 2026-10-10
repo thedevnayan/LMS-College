@@ -18,7 +18,7 @@ const errorHandler = (err, req, res, next) => {
   if (process.env.NODE_ENV === 'development') {
     console.error(err);
   } else {
-    console.error(`[${err.errorCode || 'ERROR'}] ${err.message}`, err.errors ? err.errors : '');
+    console.error(`[${err.errorCode || 'ERROR'}] ${err.message}`);
   }
 
   let statusCode = err.statusCode || 500;
@@ -35,6 +35,7 @@ const errorHandler = (err, req, res, next) => {
     for (const field in err.errors) {
       fields[field] = err.errors[field].message;
     }
+    console.error('=> VALIDATION FIELDS FAILING:', JSON.stringify(fields, null, 2));
   }
   
   // Handle Mongoose CastError (invalid ObjectId etc.)

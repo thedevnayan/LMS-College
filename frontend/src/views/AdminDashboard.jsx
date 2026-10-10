@@ -12,6 +12,7 @@ import {
   FlaskConical, BookMarked, ChevronRight, RefreshCw, Search, Zap, QrCode, Link2, ToggleLeft, ToggleRight, UserPlus, X
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/utils/clipboard';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -60,13 +61,13 @@ export default function AdminDashboard() {
   const copyEnrollLink = (enrollmentToken) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const url = `${origin}/enroll/${enrollmentToken}`;
-    navigator.clipboard.writeText(url);
+    copyToClipboard(url);
     setCopiedCode(enrollmentToken);
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
   const copyCode = (code) => {
-    navigator.clipboard.writeText(code);
+    copyToClipboard(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
   };

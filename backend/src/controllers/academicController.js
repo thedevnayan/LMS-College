@@ -75,8 +75,11 @@ const createProgram = asyncHandler(async (req, res, next) => {
   }
   let instId = institutionId;
   if (!instId) {
-    const inst = await Institution.findOne();
-    instId = inst?._id;
+    let inst = await Institution.findOne();
+    if (!inst) {
+      inst = await Institution.create({ name: 'Mohanlal Sukhadia University Udaipur', code: 'MLSU' });
+    }
+    instId = inst._id;
   }
   const program = await Program.create({
     institutionId: instId,
@@ -111,19 +114,22 @@ const getAcademicSessions = asyncHandler(async (req, res) => {
 
 const createAcademicSession = asyncHandler(async (req, res, next) => {
   const { institutionId, name, startDate, endDate, status } = req.body;
-  if (!name || !startDate || !endDate) {
-    return next(new ApiError(400, 'VALIDATION_ERROR', 'Name, startDate, and endDate are required'));
+  if (!name) {
+    return next(new ApiError(400, 'VALIDATION_ERROR', 'Name is required'));
   }
   let instId = institutionId;
   if (!instId) {
-    const inst = await Institution.findOne();
-    instId = inst?._id;
+    let inst = await Institution.findOne();
+    if (!inst) {
+      inst = await Institution.create({ name: 'Default College', code: 'DC' });
+    }
+    instId = inst._id;
   }
   const session = await AcademicSession.create({
     institutionId: instId,
     name,
-    startDate: new Date(startDate),
-    endDate: new Date(endDate),
+    startDate: startDate ? new Date(startDate) : undefined,
+    endDate: endDate ? new Date(endDate) : undefined,
     status: status || 'Upcoming',
     isCurrent: status === 'Active',
   });
@@ -296,14 +302,14 @@ const getCourseOfferings = asyncHandler(async (req, res) => {
 });
 
 const createCourseOffering = asyncHandler(async (req, res, next) => {
-  const { courseId, academicSessionId, programId, academicPeriodId, departmentId, primaryTeacherId } = req.body;
-  if (!courseId || !academicSessionId || !programId || !academicPeriodId || !primaryTeacherId) {
-    return next(new ApiError(400, 'VALIDATION_ERROR', 'Course, session, program, period, and teacher are required'));
+  const { courseId, academicSessionId, programId, academicPeriodId, teachingGroupId, departmentId, primaryTeacherId } = req.body;
+  if (!courseId || !academicSessionId || !programId || !academicPeriodId || !teachingGroupId || !primaryTeacherId) {
+    return next(new ApiError(400, 'VALIDATION_ERROR', 'Course, session, program, period, batch, and teacher are required'));
   }
 
-  const existing = await CourseOffering.findOne({ courseId, academicSessionId, programId, academicPeriodId });
+  const existing = await CourseOffering.findOne({ courseId, teachingGroupId });
   if (existing) {
-    return next(new ApiError(409, 'CONFLICT', 'A course offering for this course, session, and period already exists'));
+    return next(new ApiError(409, 'CONFLICT', 'A course offering for this course and batch already exists'));
   }
 
   const offering = await CourseOffering.create({
@@ -311,12 +317,13 @@ const createCourseOffering = asyncHandler(async (req, res, next) => {
     academicSessionId,
     programId,
     academicPeriodId,
+    teachingGroupId,
     departmentId: departmentId || null,
     primaryTeacherId,
     status: 'Active',
   });
 
-  await logAudit({ actor: req.user, action: 'COURSE_OFFERING_CREATED', entity: 'CourseOffering', entityId: offering._id, metadata: { courseId } });
+  await logAudit({ actor: req.user, action: 'COURSE_OFFERING_CREATED', entity: 'CourseOffering', entityId: offering._id, metadata: { courseId, teachingGroupId } });
   res.status(201).json(successResponse(offering, 'Course offering created successfully'));
 });
 
@@ -928,39 +935,51 @@ const syncCurriculumToOfferings = asyncHandler(async (req, res, next) => {
   if (curriculumItems.length === 0) {
     return res.status(200).json(successResponse([], 'No curriculum subjects found to sync'));
   }
+  
+  // Find all teaching groups for this program and session
+  const tgQuery = { programId, academicSessionId };
+  if (academicPeriodId) tgQuery.academicPeriodId = academicPeriodId;
+  const teachingGroups = await TeachingGroup.find(tgQuery);
+  
+  if (teachingGroups.length === 0) {
+    return next(new ApiError(400, 'VALIDATION_ERROR', 'No academic batches (Teaching Groups) found for this program/session. Create batches first before syncing curriculum.'));
+  }
 
   const defaultFaculty = (await User.findOne({ role: 'professor' })) || req.user;
   const syncedOfferings = [];
 
-  for (const item of curriculumItems) {
-    const courseId = item.courseId?._id || item.courseId;
-    const periodId = item.academicPeriodId;
-    const teacherId = item.defaultTeacherId || item.courseId?.professorId || defaultFaculty._id;
+  for (const tg of teachingGroups) {
+    for (const item of curriculumItems) {
+      if (item.academicPeriodId.toString() !== tg.academicPeriodId.toString()) continue;
+      
+      const courseId = item.courseId?._id || item.courseId;
+      const periodId = item.academicPeriodId;
+      const teacherId = item.defaultTeacherId || item.courseId?.professorId || defaultFaculty._id;
 
-    let offering = await CourseOffering.findOne({
-      courseId,
-      academicSessionId,
-      programId,
-      academicPeriodId: periodId,
-    });
-
-    if (!offering) {
-      offering = await CourseOffering.create({
+      let offering = await CourseOffering.findOne({
         courseId,
-        academicSessionId,
-        programId,
-        academicPeriodId: periodId,
-        departmentId: item.courseId?.departmentId || null,
-        primaryTeacherId: teacherId,
-        status: 'Active',
+        teachingGroupId: tg._id,
       });
-      syncedOfferings.push({ offering, action: 'created' });
-    } else {
-      if (item.defaultTeacherId && offering.primaryTeacherId?.toString() !== item.defaultTeacherId.toString()) {
-        offering.primaryTeacherId = item.defaultTeacherId;
-        await offering.save();
+
+      if (!offering) {
+        offering = await CourseOffering.create({
+          courseId,
+          academicSessionId,
+          programId,
+          academicPeriodId: periodId,
+          teachingGroupId: tg._id,
+          departmentId: item.courseId?.departmentId || null,
+          primaryTeacherId: teacherId,
+          status: 'Active',
+        });
+        syncedOfferings.push({ offering, action: 'created' });
+      } else {
+        if (item.defaultTeacherId && offering.primaryTeacherId?.toString() !== item.defaultTeacherId.toString()) {
+          offering.primaryTeacherId = item.defaultTeacherId;
+          await offering.save();
+        }
+        syncedOfferings.push({ offering, action: 'existing' });
       }
-      syncedOfferings.push({ offering, action: 'existing' });
     }
   }
 
@@ -972,7 +991,7 @@ const syncCurriculumToOfferings = asyncHandler(async (req, res, next) => {
     metadata: { programId, academicSessionId, count: syncedOfferings.length },
   });
 
-  res.status(200).json(successResponse(syncedOfferings, `Synced ${syncedOfferings.length} subjects to academic session`));
+  res.status(200).json(successResponse(syncedOfferings, `Synced ${syncedOfferings.length} subjects to academic batches`));
 });
 
 // ─── FACULTY & INSTRUCTORS ───
@@ -1036,32 +1055,42 @@ const saveFacultyAllocations = asyncHandler(async (req, res, next) => {
       practicalGroup = await PracticalGroup.findById(practicalGroupId);
     }
 
-    // Determine batch name for Classroom (e.g. "Batch B" -> "B", or "B" -> "B")
-    let classBatch = teachingGroup.name.replace(/^batch\s*/i, '').trim() || teachingGroup.name.trim();
-    if (!classBatch) classBatch = 'A';
-
-    let labBatch = null;
-    if (type === 'lab') {
-      labBatch = practicalGroup ? practicalGroup.name.trim() : (alloc.labBatchName || '1');
+    // 1. Ensure CourseOffering exists
+    let offering = await CourseOffering.findOne({
+      courseId,
+      teachingGroupId,
+    });
+    
+    if (!offering) {
+      offering = await CourseOffering.create({
+        courseId,
+        academicSessionId,
+        programId,
+        academicPeriodId,
+        teachingGroupId,
+        primaryTeacherId: facultyId,
+      });
+    } else if (offering.primaryTeacherId?.toString() !== facultyId.toString() && type === 'theory') {
+      // Update primary teacher if assigning a new theory teacher
+      offering.primaryTeacherId = facultyId;
+      await offering.save();
     }
 
-    // 1. Ensure or update Classroom
+    // 2. Ensure Classroom exists
     let classroom = await Classroom.findOne({
-      courseId,
-      session: session.name,
-      classBatch: classBatch.toUpperCase(),
+      courseOfferingId: offering._id,
       type,
-      labBatch: type === 'lab' ? labBatch : null,
+      practicalGroupId: practicalGroupId || null,
     });
 
     if (!classroom) {
       classroom = await Classroom.create({
-        courseId,
+        courseOfferingId: offering._id,
+        courseId: courseId,
         professorId: facultyId,
         session: session.name,
-        classBatch: classBatch.toUpperCase(),
         type,
-        labBatch: type === 'lab' ? labBatch : null,
+        practicalGroupId: practicalGroupId || null,
       });
     } else {
       if (classroom.professorId.toString() !== facultyId.toString()) {

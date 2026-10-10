@@ -1,67 +1,107 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { classroomsAPI, coursesAPI } from '@/services/api';
+import { classroomsAPI, academicAPI } from '@/services/api';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   ArrowLeft, Check, Copy, BookOpen, FlaskConical, BookMarked,
-  Plus, AlertCircle, Sparkles, Download, QrCode
+  Plus, AlertCircle, Sparkles, Download
 } from 'lucide-react';
-
-// Generate session options: current and next 2 academic years
-function getSessionOptions() {
-  const now = new Date();
-  const year = now.getFullYear();
-  // If month >= June, current session starts this year
-  const startYear = now.getMonth() >= 5 ? year : year - 1;
-  const sessions = [];
-  for (let i = -1; i <= 2; i++) {
-    const y = startYear + i;
-    sessions.push(`${y}-${y + 1}`);
-  }
-  return sessions;
-}
+import { copyToClipboard } from '@/utils/clipboard';
 
 export default function CreateClassroom() {
   const router = useRouter();
-  const [courses, setCourses] = useState([]);
-  const [loadingCourses, setLoadingCourses] = useState(true);
+  
+  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(null); // holds created classroom data
+  const [success, setSuccess] = useState(null); 
 
   // Form state
-  const [courseId, setCourseId] = useState('');
-  const [newCourseName, setNewCourseName] = useState('');
-  const [showNewCourse, setShowNewCourse] = useState(false);
-  const [session, setSession] = useState(getSessionOptions()[1]); // default to current session
-  const [classBatch, setClassBatch] = useState('');
+  const [sessions, setSessions] = useState([]);
+  const [sessionId, setSessionId] = useState('');
+  
+  const [batches, setBatches] = useState([]);
+  const [batchId, setBatchId] = useState('');
+  
+  const [offerings, setOfferings] = useState([]);
+  const [offeringId, setOfferingId] = useState('');
+  
   const [type, setType] = useState('theory');
-  const [selectedSubBatches, setSelectedSubBatches] = useState([1, 2]);
-
-  const sessions = getSessionOptions();
+  
+  const [practicalGroups, setPracticalGroups] = useState([]);
+  const [selectedSubBatches, setSelectedSubBatches] = useState([]);
 
   useEffect(() => {
-    fetchCourses();
+    fetchSessions();
   }, []);
 
-  const fetchCourses = async () => {
+  const fetchSessions = async () => {
     try {
-      const res = await coursesAPI.list('limit=100');
+      const res = await academicAPI.getSessions();
       if (res.success) {
-        setCourses(res.data);
-        if (res.data.length > 0) {
-          setCourseId(res.data[0]._id);
-        } else {
-          setShowNewCourse(true);
-        }
+        setSessions(res.data);
+        const currentSession = res.data.find(s => s.isCurrent);
+        if (currentSession) setSessionId(currentSession._id);
+        else if (res.data.length > 0) setSessionId(res.data[0]._id);
       }
     } catch (err) {
-      console.error('Failed to fetch courses:', err);
+      console.error('Failed to fetch sessions:', err);
     } finally {
-      setLoadingCourses(false);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (sessionId) {
+      fetchBatches();
+    } else {
+      setBatches([]);
+      setBatchId('');
+    }
+  }, [sessionId]);
+
+  const fetchBatches = async () => {
+    try {
+      const res = await academicAPI.getBatches(`academicSessionId=${sessionId}`);
+      if (res.success) {
+        setBatches(res.data);
+        if (res.data.length > 0) setBatchId(res.data[0]._id);
+        else setBatchId('');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (batchId) {
+      fetchOfferings();
+      const selectedBatch = batches.find(b => b._id === batchId);
+      setPracticalGroups(selectedBatch?.practicalGroups || []);
+    } else {
+      setOfferings([]);
+      setOfferingId('');
+      setPracticalGroups([]);
+    }
+  }, [batchId, batches]);
+
+  const fetchOfferings = async () => {
+    try {
+      const res = await academicAPI.getOfferings(`academicSessionId=${sessionId}`);
+      if (res.success) {
+        const batchOfferings = res.data.filter(o => {
+           const tgId = typeof o.teachingGroupId === 'object' ? o.teachingGroupId?._id : o.teachingGroupId;
+           return tgId === batchId;
+        });
+        setOfferings(batchOfferings);
+        if (batchOfferings.length > 0) setOfferingId(batchOfferings[0]._id);
+        else setOfferingId('');
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -71,46 +111,29 @@ export default function CreateClassroom() {
     setSubmitting(true);
 
     try {
-      let finalCourseId = courseId;
-
-      // If creating a new course
-      if (showNewCourse) {
-        if (!newCourseName.trim()) {
-          setError('Course name is required');
-          setSubmitting(false);
-          return;
-        }
-        const courseRes = await coursesAPI.create({ title: newCourseName.trim() });
-        if (courseRes.success) {
-          finalCourseId = courseRes.data._id;
-        }
-      }
-
-      if (!finalCourseId) {
-        setError('Please select or create a course');
+      if (!offeringId) {
+        setError('Please select a valid course offering.');
         setSubmitting(false);
         return;
       }
 
       const payload = {
-        courseId: finalCourseId,
-        session,
-        classBatch: classBatch.toUpperCase(),
+        courseOfferingId: offeringId,
         type,
       };
 
       if (type === 'lab') {
         if (selectedSubBatches.length === 0) {
-          setError('Please select at least one lab sub-batch');
+          setError('Please select at least one practical group for a lab class.');
           setSubmitting(false);
           return;
         }
-        payload.labBatches = selectedSubBatches.map(n => `${classBatch.toUpperCase()}${n}`);
+        payload.practicalGroupIds = selectedSubBatches;
       }
 
       const res = await classroomsAPI.create(payload);
       if (res.success) {
-        setSuccess(res.data); // now returns an array
+        setSuccess(res.data);
       }
     } catch (err) {
       setError(err.message || 'Failed to create classroom');
@@ -119,22 +142,18 @@ export default function CreateClassroom() {
     }
   };
 
-  // Preview lab batches
-  const previewLabBatches = type === 'lab' && classBatch
-    ? selectedSubBatches.map(n => `${classBatch.toUpperCase()}${n}`)
-    : [];
-
-  const toggleSubBatch = (n) => {
-    if (selectedSubBatches.includes(n)) {
-      setSelectedSubBatches(selectedSubBatches.filter((x) => x !== n));
+  const toggleSubBatch = (id) => {
+    if (selectedSubBatches.includes(id)) {
+      setSelectedSubBatches(selectedSubBatches.filter((x) => x !== id));
     } else {
-      setSelectedSubBatches([...selectedSubBatches, n].sort());
+      setSelectedSubBatches([...selectedSubBatches, id]);
     }
   };
 
-  // Success screen
+  const previewLabBatches = practicalGroups.filter(pg => selectedSubBatches.includes(pg._id)).map(pg => pg.name);
+
   if (success && Array.isArray(success)) {
-    return <SuccessScreen classrooms={success} navigate={navigate} />;
+    return <SuccessScreen classrooms={success} />;
   }
 
   return (
@@ -172,7 +191,7 @@ export default function CreateClassroom() {
           Create a Classroom
         </h1>
         <p style={{ color: 'var(--color-fog)', fontSize: '14px' }}>
-          Set up a new class — a QR code will be generated for students to scan and enroll
+          Set up a new class mapped directly to your Academic Hierarchy
         </p>
       </motion.div>
 
@@ -212,91 +231,61 @@ export default function CreateClassroom() {
           </motion.div>
         )}
 
-        {/* Course Selection */}
-        <div style={{ marginBottom: '24px' }}>
-          <label className="admin-label">Course</label>
-          {loadingCourses ? (
-            <div style={{ padding: '12px', color: 'rgba(255,255,255,0.3)' }}>Loading courses...</div>
-          ) : (
-            <>
-              {!showNewCourse ? (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <select
-                    value={courseId}
-                    onChange={(e) => setCourseId(e.target.value)}
-                    className="admin-input"
-                    style={{ flex: 1 }}
-                  >
-                    {courses.map((c) => (
-                      <option key={c._id} value={c._id}>{c.title}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setShowNewCourse(true)}
-                    className="admin-btn-outline"
-                    style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <Plus size={14} /> New
-                  </button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="text"
-                    value={newCourseName}
-                    onChange={(e) => setNewCourseName(e.target.value)}
-                    placeholder="e.g. Data Structures & Algorithms"
-                    className="admin-input"
-                    style={{ flex: 1 }}
-                  />
-                  {courses.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowNewCourse(false);
-                        setNewCourseName('');
-                      }}
-                      className="admin-btn-outline"
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </div>
+        {/* Dynamic Filters */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '24px' }}>
+          
+          {/* Session Selection */}
+          <div>
+            <label className="admin-label">Academic Session</label>
+            <select
+              value={sessionId}
+              onChange={(e) => setSessionId(e.target.value)}
+              className="admin-input"
+              required
+            >
+              {sessions.map((s) => (
+                <option key={s._id} value={s._id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
 
-        {/* Session */}
-        <div style={{ marginBottom: '24px' }}>
-          <label className="admin-label">Academic Session</label>
-          <select
-            value={session}
-            onChange={(e) => setSession(e.target.value)}
-            className="admin-input"
-          >
-            {sessions.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </div>
+          {/* Batch Selection */}
+          <div>
+            <label className="admin-label">Academic Batch</label>
+            <select
+              value={batchId}
+              onChange={(e) => setBatchId(e.target.value)}
+              className="admin-input"
+              required
+            >
+              <option value="">Select a Batch</option>
+              {batches.map((b) => (
+                <option key={b._id} value={b._id}>{b.name} ({b.programId?.code})</option>
+              ))}
+            </select>
+            {batches.length === 0 && sessionId && (
+              <p style={{ color: 'var(--color-fog)', fontSize: '12px', marginTop: '6px' }}>No batches found in this session. Go to Academic Setup to create one.</p>
+            )}
+          </div>
 
-        {/* Class Batch */}
-        <div style={{ marginBottom: '24px' }}>
-          <label className="admin-label">Class Batch</label>
-          <input
-            type="text"
-            value={classBatch}
-            onChange={(e) => setClassBatch(e.target.value.toUpperCase())}
-            placeholder="e.g. A, B, C"
-            className="admin-input"
-            maxLength={5}
-            required
-          />
-          <p className="admin-hint">
-            The section or batch identifier for this class
-          </p>
+          {/* Course Offering Selection */}
+          <div>
+            <label className="admin-label">Course Offering / Subject</label>
+            <select
+              value={offeringId}
+              onChange={(e) => setOfferingId(e.target.value)}
+              className="admin-input"
+              required
+            >
+              <option value="">Select an Offering</option>
+              {offerings.map((o) => (
+                <option key={o._id} value={o._id}>{o.courseId?.title}</option>
+              ))}
+            </select>
+            {offerings.length === 0 && batchId && (
+              <p style={{ color: 'var(--color-fog)', fontSize: '12px', marginTop: '6px' }}>No subjects assigned to this batch. Go to Academic Setup to add course offerings.</p>
+            )}
+          </div>
         </div>
 
         {/* Type Toggle */}
@@ -320,7 +309,7 @@ export default function CreateClassroom() {
           </div>
         </div>
 
-        {/* Lab Batch Count (only if lab) */}
+        {/* Practical Groups (only if lab) */}
         <AnimatePresence>
           {type === 'lab' && (
             <motion.div
@@ -330,35 +319,41 @@ export default function CreateClassroom() {
               transition={{ duration: 0.3 }}
               style={{ overflow: 'hidden', marginBottom: '24px' }}
             >
-              <label className="admin-label">Select Lab Sub-Batches</label>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                {[1, 2, 3, 4, 5].map((n) => {
-                  const isSelected = selectedSubBatches.includes(n);
-                  return (
-                    <motion.button
-                      key={n}
-                      type="button"
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => toggleSubBatch(n)}
-                      style={{
-                        width: 'auto',
-                        padding: '0 16px',
-                        height: '48px',
-                        borderRadius: 'var(--radius-cards)',
-                        border: `1px solid ${isSelected ? '#ff4dd5' : 'var(--color-ink)'}`,
-                        backgroundColor: isSelected ? 'rgba(255,77,213,0.12)' : 'var(--color-pure-white)',
-                        color: isSelected ? '#ff4dd5' : 'var(--color-ink)',
-                        fontSize: '16px',
-                        fontWeight: isSelected ? 600 : 400,
-                        cursor: 'pointer',
-                        transition: 'all 200ms ease',
-                      }}
-                    >
-                      {classBatch ? `${classBatch.toUpperCase()}${n}` : `Batch ${n}`}
-                    </motion.button>
-                  );
-                })}
-              </div>
+              <label className="admin-label">Select Practical Sub-Batches</label>
+              {practicalGroups.length === 0 ? (
+                <div style={{ padding: '16px', backgroundColor: '#f5f5f5', borderRadius: '8px', fontSize: '13px', color: 'var(--color-fog)' }}>
+                  No practical sub-batches exist for this batch. Add them in Academic Setup.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {practicalGroups.map((pg) => {
+                    const isSelected = selectedSubBatches.includes(pg._id);
+                    return (
+                      <motion.button
+                        key={pg._id}
+                        type="button"
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => toggleSubBatch(pg._id)}
+                        style={{
+                          width: 'auto',
+                          padding: '0 16px',
+                          height: '48px',
+                          borderRadius: 'var(--radius-cards)',
+                          border: `1px solid ${isSelected ? '#ff4dd5' : 'var(--color-ink)'}`,
+                          backgroundColor: isSelected ? 'rgba(255,77,213,0.12)' : 'var(--color-pure-white)',
+                          color: isSelected ? '#ff4dd5' : 'var(--color-ink)',
+                          fontSize: '14px',
+                          fontWeight: isSelected ? 600 : 400,
+                          cursor: 'pointer',
+                          transition: 'all 200ms ease',
+                        }}
+                      >
+                        {pg.name}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Preview */}
               {previewLabBatches.length > 0 && (
@@ -378,7 +373,7 @@ export default function CreateClassroom() {
                   }}
                 >
                   <span style={{ color: 'var(--color-fog)', fontSize: '12px' }}>
-                    Sub-batches:
+                    Selected Sub-batches:
                   </span>
                   {previewLabBatches.map((b) => (
                     <span key={b} style={{
@@ -400,19 +395,19 @@ export default function CreateClassroom() {
         {/* Submit */}
         <motion.button
           type="submit"
-          disabled={submitting || !classBatch}
+          disabled={submitting || !offeringId || (type === 'lab' && selectedSubBatches.length === 0)}
           whileTap={{ scale: 0.97 }}
           style={{
             width: '100%',
             padding: '14px',
             borderRadius: 'var(--radius-buttons)',
             border: '1px solid var(--color-ink)',
-            background: (submitting || !classBatch)
+            background: (submitting || !offeringId || (type === 'lab' && selectedSubBatches.length === 0))
               ? 'var(--color-paper-white)'
               : 'var(--color-sun-yellow)',
             color: 'var(--color-ink)',
             fontSize: 'var(--text-body)',
-            cursor: (submitting || !classBatch) ? 'not-allowed' : 'pointer',
+            cursor: (submitting || !offeringId || (type === 'lab' && selectedSubBatches.length === 0)) ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -481,7 +476,7 @@ function TypeToggle({ active, onClick, icon: Icon, label, color }) {
 
 // ─── Success Screen ───
 
-function SuccessScreen({ classrooms, navigate }) {
+function SuccessScreen({ classrooms }) {
   const [copiedIndex, setCopiedIndex] = useState(null);
   const router = useRouter();
 
@@ -491,7 +486,7 @@ function SuccessScreen({ classrooms, navigate }) {
   };
 
   const copyUrl = (classroom, index) => {
-    navigator.clipboard.writeText(getEnrollUrl(classroom));
+    copyToClipboard(getEnrollUrl(classroom));
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
   };
@@ -510,7 +505,7 @@ function SuccessScreen({ classrooms, navigate }) {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       const link = document.createElement('a');
-      const label = classroom.labBatch || classroom.classBatch || 'classroom';
+      const label = classroom.practicalGroupId?.name || classroom.type || 'classroom';
       link.download = `qr-enroll-${label}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
@@ -522,7 +517,6 @@ function SuccessScreen({ classrooms, navigate }) {
   const courseName = classrooms[0]?.courseId?.title || 'Course';
   const type = classrooms[0]?.type;
   const session = classrooms[0]?.session;
-  const classBatch = classrooms[0]?.classBatch;
 
   return (
     <div style={{ padding: '32px', maxWidth: '720px', margin: '0 auto' }}>
@@ -539,7 +533,6 @@ function SuccessScreen({ classrooms, navigate }) {
           marginTop: '60px',
         }}
       >
-        {/* Success icon */}
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
@@ -565,7 +558,6 @@ function SuccessScreen({ classrooms, navigate }) {
           Share {isMultiple ? 'these QR codes' : 'this QR code'} with your students to scan and enroll
         </p>
 
-        {/* Classroom details */}
         <div style={{
           display: 'flex',
           justifyContent: 'center',
@@ -574,7 +566,6 @@ function SuccessScreen({ classrooms, navigate }) {
           marginBottom: '32px',
         }}>
           <span className="admin-badge">{session}</span>
-          <span className="admin-badge">Batch {classBatch}</span>
           <span className="admin-badge" style={{
             backgroundColor: type === 'lab' ? 'rgba(255,77,213,0.12)' : 'rgba(255,222,59,0.12)',
             color: type === 'lab' ? '#ff4dd5' : '#ffde3b',
@@ -583,7 +574,6 @@ function SuccessScreen({ classrooms, navigate }) {
           </span>
         </div>
 
-        {/* QR Codes */}
         <div style={{ display: 'grid', gap: '20px', gridTemplateColumns: isMultiple ? '1fr 1fr' : '1fr', marginBottom: '32px' }}>
           {classrooms.map((c, i) => (
             <motion.div
@@ -602,19 +592,6 @@ function SuccessScreen({ classrooms, navigate }) {
                 alignItems: 'center',
               }}
             >
-              {c.type === 'lab' && c.labBatch && (
-                <div style={{
-                  marginBottom: '14px',
-                  color: '#ff4dd5',
-                  fontWeight: 600,
-                  fontSize: '14px',
-                  backgroundColor: 'rgba(255,77,213,0.12)',
-                  padding: '4px 12px',
-                  borderRadius: '6px',
-                }}>
-                  {c.labBatch}
-                </div>
-              )}
               <div id={`qr-code-${i}`} style={{
                 padding: '12px',
                 backgroundColor: '#fff',
@@ -631,7 +608,6 @@ function SuccessScreen({ classrooms, navigate }) {
                 />
               </div>
 
-              {/* Action buttons */}
               <div style={{ display: 'flex', gap: '8px' }}>
                 <motion.button
                   whileTap={{ scale: 0.95 }}
@@ -678,7 +654,6 @@ function SuccessScreen({ classrooms, navigate }) {
           ))}
         </div>
 
-        {/* Actions */}
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
           <motion.button
             whileTap={{ scale: 0.97 }}

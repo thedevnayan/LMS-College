@@ -4,6 +4,11 @@ const { v4: uuidv4 } = require('uuid');
 
 const classroomSchema = new mongoose.Schema(
   {
+    courseOfferingId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'CourseOffering',
+      required: [true, 'Course offering is required'],
+    },
     courseId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Course',
@@ -20,22 +25,16 @@ const classroomSchema = new mongoose.Schema(
       trim: true,
       // e.g. "2025-2026"
     },
-    classBatch: {
-      type: String,
-      required: [true, 'Class batch is required'],
-      trim: true,
-      uppercase: true,
-      // e.g. "A", "B", "C"
-    },
+
     type: {
       type: String,
       enum: ['theory', 'lab'],
       required: [true, 'Type (theory/lab) is required'],
     },
-    labBatch: {
-      type: String,
+    practicalGroupId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'PracticalGroup',
       default: null,
-      // e.g. "B1" for classBatch "B" when type is "lab"
     },
     joinCode: {
       type: String,
@@ -72,9 +71,9 @@ const classroomSchema = new mongoose.Schema(
 // TTL Index for soft deletes
 classroomSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
-// Compound index: one classroom per course+session+batch+type+labBatch (prevents duplicates)
+// Compound index: one classroom per offering + type + practical group
 classroomSchema.index(
-  { courseId: 1, session: 1, classBatch: 1, type: 1, labBatch: 1 },
+  { courseOfferingId: 1, type: 1, practicalGroupId: 1 },
   { unique: true, partialFilterExpression: { deletedAt: null } }
 );
 
@@ -126,11 +125,11 @@ classroomSchema.pre('validate', async function () {
 });
 
 /**
- * Clear labBatch if type is theory
+ * Clear practicalGroupId if type is theory
  */
 classroomSchema.pre('validate', function () {
   if (this.type === 'theory') {
-    this.labBatch = null;
+    this.practicalGroupId = null;
   }
 });
 

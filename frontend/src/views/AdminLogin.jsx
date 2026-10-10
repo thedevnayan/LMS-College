@@ -52,11 +52,6 @@ export default function AdminLogin() {
     }
   };
 
-  const handleQuickFill = (demoEmail, demoPassword) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    setError('');
-  };
 
   return (
     <div style={{
@@ -147,68 +142,6 @@ export default function AdminLogin() {
           </p>
         </motion.div>
 
-        {/* Demo Credentials Quick Fill Pills */}
-        <div style={{
-          marginBottom: '20px',
-          padding: '16px',
-          borderRadius: '12px',
-          border: '1px solid var(--color-ink)',
-          backgroundColor: 'var(--color-paper-white)',
-          boxShadow: '3px 3px 0 var(--color-ink)',
-        }}>
-          <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-fog)', marginBottom: '10px' }}>
-            Quick-Fill Demo Credentials
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('admin@college.edu', 'AdminPassword@123')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: '1px solid var(--color-ink)',
-                backgroundColor: 'var(--color-sun-yellow)',
-                fontSize: '12px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <ShieldCheck size={16} />
-              <div>
-                <div>Administrator</div>
-                <div style={{ fontSize: '10px', opacity: 0.8, fontWeight: 500 }}>Full MIS Access</div>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickFill('prof@test.com', 'test1234')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: '1px solid var(--color-ink)',
-                backgroundColor: 'var(--color-periwinkle)',
-                fontSize: '12px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <UserCheck size={16} />
-              <div>
-                <div>Prof Nayan</div>
-                <div style={{ fontSize: '10px', opacity: 0.8, fontWeight: 500 }}>Faculty Panel</div>
-              </div>
-            </button>
-          </div>
-        </div>
 
         {/* Login Form */}
         <motion.form

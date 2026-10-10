@@ -169,6 +169,7 @@ export default function AcademicManager() {
             <Plus size={16} />
             New Program
           </button>
+
           <button
             onClick={() => openCreateModal('batch')}
             style={{
@@ -188,6 +189,27 @@ export default function AcademicManager() {
           >
             <Plus size={16} />
             New Batch
+          </button>
+          
+          <button
+            onClick={() => openCreateModal('session')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '10px 16px',
+              borderRadius: '8px',
+              border: '1px solid var(--color-ink)',
+              backgroundColor: 'var(--color-electric-lime)',
+              color: 'var(--color-ink)',
+              fontWeight: 600,
+              fontSize: '13px',
+              cursor: 'pointer',
+              boxShadow: '2px 2px 0 var(--color-ink)',
+            }}
+          >
+            <Calendar size={16} />
+            New Session
           </button>
         </div>
       </div>
@@ -238,6 +260,14 @@ export default function AcademicManager() {
 
       {/* Tab Content */}
       {activeTab === 'programs' && (
+        programs.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: 'var(--color-paper-white)', borderRadius: '12px', border: '1px dashed var(--color-ink)' }}>
+            <GraduationCap size={48} color="var(--color-fog)" style={{ marginBottom: '16px' }} />
+            <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-ink)', marginBottom: '8px' }}>No Programs Found</h3>
+            <p style={{ color: 'var(--color-fog)', fontSize: '14px', marginBottom: '20px' }}>Create a new program to start building your academic hierarchy.</p>
+            <button onClick={() => openCreateModal('program')} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid var(--color-ink)', backgroundColor: 'var(--color-sun-yellow)', fontWeight: 600, cursor: 'pointer' }}>+ New Program</button>
+          </div>
+        ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
           {programs.map(prog => (
             <div
@@ -276,9 +306,20 @@ export default function AcademicManager() {
             </div>
           ))}
         </div>
+        )
       )}
 
+
+
       {activeTab === 'batches' && (
+        batches.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: 'var(--color-paper-white)', borderRadius: '12px', border: '1px dashed var(--color-ink)' }}>
+            <Users size={48} color="var(--color-fog)" style={{ marginBottom: '16px' }} />
+            <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-ink)', marginBottom: '8px' }}>No Batches Found</h3>
+            <p style={{ color: 'var(--color-fog)', fontSize: '14px', marginBottom: '20px' }}>Create a new batch for your students.</p>
+            <button onClick={() => openCreateModal('batch')} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid var(--color-ink)', backgroundColor: 'var(--color-sun-yellow)', fontWeight: 600, cursor: 'pointer' }}>+ New Batch</button>
+          </div>
+        ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
           {batches.map(batch => (
             <div
@@ -339,9 +380,17 @@ export default function AcademicManager() {
             </div>
           ))}
         </div>
+        )
       )}
 
       {activeTab === 'offerings' && (
+        offerings.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: 'var(--color-paper-white)', borderRadius: '12px', border: '1px dashed var(--color-ink)' }}>
+            <BookOpen size={48} color="var(--color-fog)" style={{ marginBottom: '16px' }} />
+            <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-ink)', marginBottom: '8px' }}>No Course Offerings Found</h3>
+            <p style={{ color: 'var(--color-fog)', fontSize: '14px' }}>No courses are currently offered for this session.</p>
+          </div>
+        ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
           {offerings.map(offering => (
             <div
@@ -395,9 +444,18 @@ export default function AcademicManager() {
             </div>
           ))}
         </div>
+        )
       )}
 
       {activeTab === 'sessions' && (
+        sessions.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: 'var(--color-paper-white)', borderRadius: '12px', border: '1px dashed var(--color-ink)' }}>
+            <Calendar size={48} color="var(--color-fog)" style={{ marginBottom: '16px' }} />
+            <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-ink)', marginBottom: '8px' }}>No Academic Sessions Found</h3>
+            <p style={{ color: 'var(--color-fog)', fontSize: '14px', marginBottom: '20px' }}>Create a new academic session to define your timeline.</p>
+            <button onClick={() => openCreateModal('session')} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid var(--color-ink)', backgroundColor: 'var(--color-sun-yellow)', fontWeight: 600, cursor: 'pointer' }}>+ New Session</button>
+          </div>
+        ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
           {sessions.map(sess => (
             <div
@@ -431,6 +489,7 @@ export default function AcademicManager() {
             </div>
           ))}
         </div>
+        )
       )}
 
       {/* Creation Modal */}
@@ -490,6 +549,8 @@ export default function AcademicManager() {
                 </>
               )}
 
+
+
               {modalType === 'batch' && (
                 <>
                   <div>
@@ -524,6 +585,54 @@ export default function AcademicManager() {
                       onChange={e => setFormData({ ...formData, practicalSubBatches: e.target.value })}
                       style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--color-ink)' }}
                     />
+                  </div>
+                </>
+              )}
+
+              {modalType === 'session' && (
+                <>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>Session Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Fall 2026"
+                      required
+                      value={formData.name || ''}
+                      onChange={e => setFormData({ ...formData, name: e.target.value })}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--color-ink)' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>Start Date</label>
+                      <input
+                        type="date"
+                        value={formData.startDate || ''}
+                        onChange={e => setFormData({ ...formData, startDate: e.target.value })}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--color-ink)' }}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>End Date</label>
+                      <input
+                        type="date"
+                        value={formData.endDate || ''}
+                        onChange={e => setFormData({ ...formData, endDate: e.target.value })}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--color-ink)' }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>Status</label>
+                    <select
+                      value={formData.status || 'Upcoming'}
+                      onChange={e => setFormData({ ...formData, status: e.target.value })}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--color-ink)' }}
+                    >
+                      <option value="Upcoming">Upcoming</option>
+                      <option value="Active">Active</option>
+                      <option value="Completed">Completed</option>
+                    </select>
                   </div>
                 </>
               )}

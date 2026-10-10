@@ -1,4 +1,4 @@
-import StudentLogin from '@/pages/StudentLogin';
+import StudentLogin from '@/views/StudentLogin';
 
 export default function StudentLoginPage() {
   return <StudentLogin />;

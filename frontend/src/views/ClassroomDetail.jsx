@@ -9,6 +9,7 @@ import {
   ArrowLeft, Copy, Check, Users, RefreshCw, Trash2,
   FlaskConical, BookMarked, Calendar, AlertCircle, UserCircle, Download
 } from 'lucide-react';
+import { copyToClipboard } from '@/utils/clipboard';
 
 export default function ClassroomDetail() {
   const { id } = useParams();
@@ -58,7 +59,7 @@ export default function ClassroomDetail() {
 
   const copyEnrollUrl = () => {
     if (!classroom) return;
-    navigator.clipboard.writeText(getEnrollUrl());
+    copyToClipboard(getEnrollUrl());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

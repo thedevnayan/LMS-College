@@ -60,6 +60,7 @@ app.use('/api', globalLimiter);
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
+  'http://172.20.10.2:3000',
   process.env.CORS_ORIGIN,
 ].filter(Boolean);
 

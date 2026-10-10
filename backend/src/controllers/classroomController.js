@@ -31,45 +31,53 @@ const generateUniqueBatchCode = async (prefix = 'BAT') => {
  * @desc    Create a new classroom with auto-generated 6-digit join code
  */
 const createClassroom = asyncHandler(async (req, res, next) => {
-  const { courseId, session, classBatch, type, labBatches } = req.body;
+  const { courseOfferingId, type, practicalGroupIds } = req.body;
 
-  // Verify the course exists and belongs to this professor
-  const course = await Course.findById(courseId);
-  if (!course) {
-    return next(new ApiError(404, 'NOT_FOUND', 'Course not found'));
-  }
-  if (course.professorId.toString() !== req.user._id.toString()) {
-    return next(new ApiError(403, 'FORBIDDEN', 'You can only create classrooms for your own courses'));
+  if (!courseOfferingId) {
+    return next(new ApiError(400, 'VALIDATION_ERROR', 'Course offering is required'));
   }
 
-  // Ensure labBatches is an array if lab
-  const finalLabBatches = type === 'lab' && Array.isArray(labBatches) ? labBatches : [];
+  // Fetch the course offering
+  const CourseOffering = require('../models/CourseOffering');
+  const offering = await CourseOffering.findById(courseOfferingId).populate('courseId academicSessionId');
+  
+  if (!offering) {
+    return next(new ApiError(404, 'NOT_FOUND', 'Course offering not found'));
+  }
+  
+  // Optional: check permissions (e.g., if user is primary teacher or admin)
+  if (offering.primaryTeacherId.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+     return next(new ApiError(403, 'FORBIDDEN', 'You are not the primary teacher for this course offering'));
+  }
+
+  const courseId = offering.courseId._id;
+  const sessionName = offering.academicSessionId ? offering.academicSessionId.name : 'Default Session';
+
+  const finalLabBatches = type === 'lab' && Array.isArray(practicalGroupIds) ? practicalGroupIds : [];
 
   try {
     let createdClassrooms = [];
     if (type === 'lab' && finalLabBatches.length > 0) {
-      // Create one classroom per lab batch
-      for (const lb of finalLabBatches) {
+      for (const pgId of finalLabBatches) {
         const classroom = await Classroom.create({
+          courseOfferingId,
           courseId,
           professorId: req.user._id,
-          session,
-          classBatch: classBatch.toUpperCase(),
+          session: sessionName,
           type,
-          labBatch: lb,
+          practicalGroupId: pgId,
         });
         await classroom.populate('courseId', 'title description thumbnail');
         createdClassrooms.push(classroom);
       }
     } else {
-      // Theory or no lab batches provided
       const classroom = await Classroom.create({
+        courseOfferingId,
         courseId,
         professorId: req.user._id,
-        session,
-        classBatch: classBatch.toUpperCase(),
+        session: sessionName,
         type,
-        labBatch: null,
+        practicalGroupId: null,
       });
       await classroom.populate('courseId', 'title description thumbnail');
       createdClassrooms.push(classroom);
@@ -78,7 +86,7 @@ const createClassroom = asyncHandler(async (req, res, next) => {
     res.status(201).json(successResponse(createdClassrooms, 'Classroom(s) created successfully'));
   } catch (err) {
     if (err.code === 11000) {
-      return next(new ApiError(409, 'CLASSROOM_EXISTS', 'A classroom with this session, batch, and type already exists for this course'));
+      return next(new ApiError(409, 'CLASSROOM_EXISTS', 'A classroom of this type already exists for this offering/practical group'));
     }
     next(err);
   }

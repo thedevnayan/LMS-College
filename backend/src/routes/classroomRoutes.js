@@ -7,9 +7,7 @@ const classroomController = require('../controllers/classroomController');
 const router = express.Router();
 
 const createClassroomValidation = [
-  body('courseId').notEmpty().withMessage('Course ID is required'),
-  body('session').trim().notEmpty().withMessage('Session is required (e.g. 2025-2026)'),
-  body('classBatch').trim().notEmpty().withMessage('Class batch is required (e.g. A, B, C)'),
+  body('courseOfferingId').notEmpty().withMessage('Course Offering ID is required'),
   body('type').isIn(['theory', 'lab']).withMessage('Type must be "theory" or "lab"'),
 ];
 

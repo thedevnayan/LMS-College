@@ -22,6 +22,11 @@ const courseOfferingSchema = new mongoose.Schema(
       ref: 'AcademicPeriod',
       required: [true, 'Academic period is required'],
     },
+    teachingGroupId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TeachingGroup',
+      required: [true, 'Academic batch (TeachingGroup) is required'],
+    },
     departmentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Department',
@@ -53,9 +58,9 @@ const courseOfferingSchema = new mongoose.Schema(
   }
 );
 
-// One offering per course + academic session + program + academic period
+// One offering per course + teaching group (batch)
 courseOfferingSchema.index(
-  { courseId: 1, academicSessionId: 1, programId: 1, academicPeriodId: 1 },
+  { courseId: 1, teachingGroupId: 1 },
   { unique: true, partialFilterExpression: { deletedAt: null } }
 );
 
