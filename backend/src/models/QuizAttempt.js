@@ -51,7 +51,6 @@ const quizAttemptSchema = new mongoose.Schema(
   }
 );
 
-quizAttemptSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
 // One active or submitted attempt per student per quiz
 quizAttemptSchema.index(

@@ -18,25 +18,25 @@ export default function AssignmentReport() {
   const [sortField, setSortField] = useState('submittedAt');
   const [sortDirection, setSortDirection] = useState('desc');
 
+  function fetchData() {
+ return Promise.all([
+        assignmentsAPI.getById(id),
+        assignmentsAPI.getSubmissions(id)
+      ]).then(([assignRes, subRes]) => {
+setAssignment(assignRes.data);
+setSubmissions(subRes.data);
+}).catch((err) => {
+      setError(err.message || 'Failed to load report data');
+    }).finally(() => {
+      setLoading(false);
+    });
+ }
+
   useEffect(() => {
     fetchData();
   }, [id]);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [assignRes, subRes] = await Promise.all([
-        assignmentsAPI.getById(id),
-        assignmentsAPI.getSubmissions(id)
-      ]);
-      setAssignment(assignRes.data);
-      setSubmissions(subRes.data);
-    } catch (err) {
-      setError(err.message || 'Failed to load report data');
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -84,10 +84,7 @@ export default function AssignmentReport() {
     ? (submissions.reduce((acc, sub) => acc + (sub.marks || 0), 0) / submissions.length).toFixed(1)
     : 0;
 
-  const SortIcon = ({ field }) => {
-    if (sortField !== field) return null;
-    return sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
-  };
+  const sortIcon = field => sortField !== field ? null : (sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />);
 
   return (
     <div style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '60px', paddingTop: '32px' }}>
@@ -165,7 +162,7 @@ export default function AssignmentReport() {
                   style={{ padding: '18px 24px', fontWeight: 700, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', color: 'var(--color-ink)' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    Student Name <SortIcon field="name" />
+                    Student Name {sortIcon('name')}
                   </div>
                 </th>
                 <th 
@@ -173,7 +170,7 @@ export default function AssignmentReport() {
                   style={{ padding: '18px 24px', fontWeight: 700, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', color: 'var(--color-ink)' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    Time <SortIcon field="submittedAt" />
+                    Time {sortIcon('submittedAt')}
                   </div>
                 </th>
                 <th style={{ padding: '18px 24px', fontWeight: 700, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-ink)' }}>
@@ -184,7 +181,7 @@ export default function AssignmentReport() {
                   style={{ padding: '18px 24px', fontWeight: 700, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', color: 'var(--color-ink)' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    Marks <SortIcon field="marks" />
+                    Marks {sortIcon('marks')}
                   </div>
                 </th>
               </tr>

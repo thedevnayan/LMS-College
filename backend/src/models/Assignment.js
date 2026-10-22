@@ -57,6 +57,8 @@ const assignmentSchema = new mongoose.Schema(
       type: Number,
       required: [true, 'Max marks is required'],
     },
+    status: { type: String, enum: ['draft', 'published', 'archived'], default: 'published' },
+    allowLate: { type: Boolean, default: false },
     attachments: {
       type: [String],
       default: [],
@@ -92,8 +94,6 @@ const assignmentSchema = new mongoose.Schema(
   }
 );
 
-// TTL Index for soft deletes
-assignmentSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
 assignmentSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
@@ -107,5 +107,11 @@ assignmentSchema.pre('save', async function () {
   }
 });
 
+assignmentSchema.index({ classroomId: 1, dueDate: 1 });
+assignmentSchema.pre('validate', function () {
+  if (this.startDate >= this.dueDate) this.invalidate('dueDate', 'Due date must follow start date');
+  if (this.maxMarks < 0) this.invalidate('maxMarks', 'Marks cannot be negative');
+  for (const q of this.questions) if (!Number.isInteger(q.correctOptionIndex) || q.correctOptionIndex < 0 || q.correctOptionIndex >= q.options.length) this.invalidate('questions', 'Invalid answer key');
+});
 const Assignment = mongoose.model('Assignment', assignmentSchema);
 module.exports = Assignment;

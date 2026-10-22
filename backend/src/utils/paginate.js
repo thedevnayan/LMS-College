@@ -7,11 +7,11 @@
  * @returns {Promise<Object>} { data, meta }
  */
 const paginate = async (model, filter = {}, reqQuery = {}, options = {}) => {
-  const page = parseInt(reqQuery.page, 10) || 1;
+  const page = Math.max(1, parseInt(reqQuery.page, 10) || 1);
   const limit = parseInt(reqQuery.limit, 10) || 20;
   
   // Enforce max limit of 100
-  const finalLimit = limit > 100 ? 100 : limit;
+  const finalLimit = Math.max(1, Math.min(100, limit));
   const skip = (page - 1) * finalLimit;
 
   let query = model.find(filter);

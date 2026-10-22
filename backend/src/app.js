@@ -4,7 +4,6 @@ require('./models');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
-const mongoSanitize = require('express-mongo-sanitize');
 const rateLimit = require('express-rate-limit');
 const { errorHandler, ApiError } = require('./middleware/errorHandler');
 const { successResponse } = require('./utils/response');
@@ -34,49 +33,23 @@ const app = express();
 // ─── Security Middleware ───
 app.use(helmet());              // Set secure HTTP headers
 
-// Prevent NoSQL injection on req.body and req.params
-// Note: Express 5 makes req.query a read-only getter, so we sanitize manually
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 0));
+app.use(cors({ origin: require('./config/security').corsOrigin, credentials: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: '64kb' }));
+app.use(cookieParser());
+// Reject operator/path keys rather than silently changing request meaning.
 app.use((req, res, next) => {
-  if (req.body) {
-    mongoSanitize.sanitize(req.body);
-  }
+  const unsafe = value => value && typeof value === 'object' && Object.entries(value).some(([key, v]) => key.startsWith('$') || key.includes('.') || ['__proto__', 'constructor', 'prototype'].includes(key) || unsafe(v));
+  if (unsafe(req.body) || unsafe(req.query)) return next(new ApiError(400, 'INVALID_INPUT', 'Invalid input keys'));
   next();
 });
-
-// Global API rate limiter: 200 requests per 15 min per IP
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    error: { code: 'RATE_LIMITED', message: 'Too many requests, please try again later.' },
-  },
+// Coarse anonymous abuse ceiling. Protected routes have a separate per-user quota.
+app.use('/api', rateLimit({ windowMs: 60_000, limit: 20000, standardHeaders: 'draft-8', legacyHeaders: false }));
+app.get('/api/ready', (req, res) => {
+  const ready = require('mongoose').connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ success: ready, data: { status: ready ? 'ready' : 'unavailable' } });
 });
-app.use('/api', globalLimiter);
-
-// ─── Body Parsing & CORS ───
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://172.20.10.2:3000',
-  process.env.CORS_ORIGIN,
-].filter(Boolean);
-
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-      return callback(null, true);
-    }
-    return callback(null, true); // Permissive for local dev
-  },
-  credentials: true,
-}));
-app.use(express.json({ limit: '10mb' }));          // Cap JSON body size
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(cookieParser());
 
 // Routes
 app.use('/api/auth', authRoutes);

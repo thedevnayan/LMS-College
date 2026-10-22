@@ -5,7 +5,12 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "seed:admin": "node scripts/seed-admin.cjs",
+    "dev": "node --watch src/server.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.cjs",
+    "test:browser": "node e2e/local-smoke.cjs",
+    "load": "node load/local-load.cjs",
+    "migration:inspect": "node scripts/migrate-skillbery.cjs"
   },
   "keywords": [],
   "author": "",
@@ -13,24 +18,23 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "bcrypt": "^6.0.0",
-    "cloudinary": "^1.41.3",
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^8.6.2",
     "express-validator": "^7.3.2",
     "helmet": "^8.3.0",
-    "hpp": "^0.2.3",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.9.2",
     "multer": "^2.2.0",
-    "multer-storage-cloudinary": "^4.0.0",
     "socket.io": "^4.8.3",
     "uuid": "^14.0.2"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "mongodb-memory-server": "^11.3.0",
+    "playwright": "^1.64.1",
+    "socket.io-client": "^4.8.3"
   }
 }

@@ -4,32 +4,36 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, GraduationCap, Clock, FileText } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { studentsAPI } from '@/services/api';
+import { studentsAPI, request } from '@/services/api';
+import { useAuth } from '@/context/AuthContext';
 import StudentAcademicHistory from './StudentAcademicHistory';
 
 export default function AdminStudentProfile() {
   const { id } = useParams();
   const router = useRouter();
+  const { isAdmin } = useAuth();
+  const [approvalMessage, setApprovalMessage] = useState('');
+  const [approving, setApproving] = useState(false);
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  function fetchProfile() {
+ return studentsAPI.getProfile(id).then((res) => {
+if (res.success) {
+        setProfileData(res.data);
+      }
+}).catch((error) => {
+      console.error('Failed to fetch student profile:', error);
+    }).finally(() => {
+      setLoading(false);
+    });
+ }
 
   useEffect(() => {
     fetchProfile();
   }, [id]);
 
-  const fetchProfile = async () => {
-    try {
-      setLoading(true);
-      const res = await studentsAPI.getProfile(id);
-      if (res.success) {
-        setProfileData(res.data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch student profile:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   if (loading) {
     return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-fog)' }}>Loading profile...</div>;
@@ -64,6 +68,17 @@ export default function AdminStudentProfile() {
       </button>
 
       {/* Header Profile Card */}
+      {isAdmin && !student.enrollmentApproved && <button disabled={approving} className="admin-btn-secondary" onClick={async () => {
+        if (!window.confirm('Confirm that you have verified this student’s identity against college records. This permits enrollment through invitations assigned to their email.')) return;
+        setApproving(true);
+        try {
+          await request(`/users/${id}/enrollment-approval`, { method: 'PATCH', body: { confirmed: true } });
+          setProfileData(prev => ({ ...prev, student: { ...prev.student, enrollmentApproved: true } }));
+          setApprovalMessage('Identity approved. The student can use their assigned invitation.');
+        } catch (error) { setApprovalMessage(error.message); }
+        finally { setApproving(false); }
+      }}>{approving ? 'Saving...' : 'Approve identity for enrollment'}</button>}
+      {approvalMessage && <p role="status">{approvalMessage}</p>}
       <div style={{ display: 'flex', gap: '32px', marginBottom: '32px', backgroundColor: 'var(--color-paper-white)', padding: '32px', borderRadius: '24px', border: '2px solid var(--color-ink)', boxShadow: '6px 6px 0px var(--color-ink)' }}>
         <div style={{ width: '80px', height: '80px', borderRadius: '20px', backgroundColor: 'var(--color-ink)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 800 }}>
           {student.name?.charAt(0).toUpperCase()}
@@ -179,7 +194,7 @@ export default function AdminStudentProfile() {
 
       {/* Multi-Session Academic History & Dynamic Timeline */}
       <div style={{ marginTop: '40px' }}>
-        <StudentAcademicHistory studentId={id} />
+        {isAdmin && <StudentAcademicHistory studentId={id} />}
       </div>
     </div>
   );

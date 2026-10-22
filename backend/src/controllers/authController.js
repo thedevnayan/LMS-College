@@ -3,209 +3,42 @@ const User = require('../models/User');
 const asyncHandler = require('../utils/asyncHandler');
 const { successResponse } = require('../utils/response');
 const { ApiError } = require('../middleware/errorHandler');
+const { assertAccountAccess } = require('../services/access');
+const { generateTokens, issueSession, setRefreshCookie } = require('../services/tokens');
 
-// Helper to generate tokens
-const generateTokens = (id) => {
-  const accessToken = jwt.sign({ id }, process.env.JWT_ACCESS_SECRET, {
-    expiresIn: process.env.JWT_ACCESS_EXPIRES,
-  });
-  const refreshToken = jwt.sign({ id }, process.env.JWT_REFRESH_SECRET, {
-    expiresIn: process.env.JWT_REFRESH_EXPIRES,
-  });
-  return { accessToken, refreshToken };
-};
-
-// Helper to set cookie
-const setRefreshCookie = (res, refreshToken) => {
-  // Convert 7d to ms
-  const days = parseInt(process.env.JWT_REFRESH_EXPIRES) || 7;
-  const maxAge = days * 24 * 60 * 60 * 1000;
-  
-  res.cookie('refreshToken', refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // true if in production
-    sameSite: 'strict',
-    maxAge,
-  });
-};
-
-/**
- * @route   POST /api/auth/register
- * @access  Public
- */
-const register = asyncHandler(async (req, res, next) => {
-  const { name, email, password, role } = req.body;
-
-  // The email unique index and global error handler takes care of duplicate emails
-  // We don't need to manually query `User.findOne({ email })` which avoids race conditions
-
-  const user = await User.create({
-    name,
-    email,
-    password,
-    role,
-  });
-
-  const { accessToken, refreshToken } = generateTokens(user._id);
-
-  // Save refresh token to user
-  user.refreshTokens.push(refreshToken);
-  await user.save({ validateBeforeSave: false });
-
-  setRefreshCookie(res, refreshToken);
-
-  res.status(201).json(
-    successResponse({
-      user,
-      accessToken,
-    })
-  );
+const register = asyncHandler(async (req, res) => {
+  const { name, email, password } = req.body;
+  const user = await User.create({ name, email, password, role: 'student' });
+  const accessToken = await issueSession(user, res);
+  res.status(201).json(successResponse({ user, accessToken }));
 });
-
-/**
- * @route   POST /api/auth/login
- * @access  Public
- */
-const login = asyncHandler(async (req, res, next) => {
-  const { email, password } = req.body;
-
-  // Find user by email
-  const user = await User.findOne({ email });
-
-  if (!user || !(await user.matchPassword(password))) {
-    return next(new ApiError(401, 'INVALID_CREDENTIALS', 'Invalid email or password'));
-  }
-
-  if (!user.isActive) {
-    return next(new ApiError(401, 'UNAUTHORIZED', 'Account is deactivated'));
-  }
-
-  // Check if student belongs to a batch that has login revoked
-  if (user.role === 'student') {
-    const Enrollment = require('../models/Enrollment');
-    const BatchJoinCode = require('../models/BatchJoinCode');
-    
-    const enrollments = await Enrollment.find({ studentId: user._id }).populate('classroomId');
-    
-    const batchCombos = new Set();
-    enrollments.forEach(enr => {
-      if (enr.classroomId && enr.classroomId.session && enr.classroomId.classBatch) {
-        batchCombos.add(`${enr.classroomId.session}__${enr.classroomId.classBatch}`);
-      }
-    });
-
-    for (const combo of batchCombos) {
-      const [session, classBatch] = combo.split('__');
-      const masterBatchCode = await BatchJoinCode.findOne({
-        session,
-        classBatch,
-        labBatch: null,
-      });
-
-      if (masterBatchCode && masterBatchCode.loginEnabled === false) {
-        return next(new ApiError(403, 'LOGIN_REVOKED', `Login access has been revoked for your batch (${classBatch}). Please contact administration.`));
-      }
-    }
-  }
-
-  const { accessToken, refreshToken } = generateTokens(user._id);
-
-  // Add new refresh token to array (allow multi-device)
-  // Optional: limit array size to e.g. 5 to prevent bloat
-  user.refreshTokens.push(refreshToken);
-  if (user.refreshTokens.length > 5) {
-    user.refreshTokens.shift(); // remove oldest
-  }
-  await user.save({ validateBeforeSave: false });
-
-  setRefreshCookie(res, refreshToken);
-
-  res.status(200).json(
-    successResponse({
-      user,
-      accessToken,
-    })
-  );
+const login = asyncHandler(async (req, res) => {
+  const user = await User.findOne({ email: req.body.email.toLowerCase() });
+  if (!user || !await user.matchPassword(req.body.password)) throw new ApiError(401, 'INVALID_CREDENTIALS', 'Invalid email or password');
+  await assertAccountAccess(user);
+  const accessToken = await issueSession(user, res);
+  res.json(successResponse({ user, accessToken }));
 });
-
-/**
- * @route   POST /api/auth/refresh
- * @access  Public (needs cookie)
- */
-const refresh = asyncHandler(async (req, res, next) => {
-  const incomingRefreshToken = req.cookies.refreshToken;
-
-  if (!incomingRefreshToken) {
-    return next(new ApiError(401, 'INVALID_REFRESH_TOKEN', 'No refresh token provided'));
-  }
-
-  try {
-    const decoded = jwt.verify(incomingRefreshToken, process.env.JWT_REFRESH_SECRET);
-    const user = await User.findById(decoded.id);
-
-    if (!user || !user.refreshTokens.includes(incomingRefreshToken)) {
-      return next(new ApiError(401, 'INVALID_REFRESH_TOKEN', 'Invalid refresh token'));
-    }
-
-    if (!user.isActive) {
-      return next(new ApiError(401, 'UNAUTHORIZED', 'Account is deactivated'));
-    }
-
-    // Issue new access token (rotate access, keep same refresh for MVP, or rotate both)
-    // Rotating both is more secure:
-    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
-
-    // Replace old refresh token with new one
-    user.refreshTokens = user.refreshTokens.filter((rt) => rt !== incomingRefreshToken);
-    user.refreshTokens.push(newRefreshToken);
-    await user.save({ validateBeforeSave: false });
-
-    setRefreshCookie(res, newRefreshToken);
-
-    res.status(200).json(
-      successResponse({
-        accessToken,
-      })
-    );
-  } catch (error) {
-    return next(new ApiError(401, 'INVALID_REFRESH_TOKEN', 'Refresh token expired or invalid'));
-  }
+const refresh = asyncHandler(async (req, res) => {
+  const incoming = req.cookies.refreshToken;
+  let decoded;
+  try { decoded = jwt.verify(incoming, process.env.JWT_REFRESH_SECRET, { algorithms: ['HS256'] }); }
+  catch { throw new ApiError(401, 'INVALID_REFRESH_TOKEN', 'Session expired or invalid'); }
+  const user = await User.findById(decoded.id);
+  if (!user || decoded.version !== (user.tokenVersion || 0) || !user.refreshTokens.includes(incoming)) throw new ApiError(401, 'INVALID_REFRESH_TOKEN', 'Session revoked');
+  await assertAccountAccess(user);
+  const tokens = generateTokens(user);
+  const rotated = await User.updateOne({ _id: user._id, tokenVersion: user.tokenVersion, refreshTokens: incoming }, { $set: { 'refreshTokens.$': tokens.refreshToken } });
+  if (!rotated.modifiedCount) throw new ApiError(401, 'INVALID_REFRESH_TOKEN', 'Refresh token already used');
+  setRefreshCookie(res, tokens.refreshToken);
+  res.json(successResponse({ accessToken: tokens.accessToken }));
 });
-
-/**
- * @route   POST /api/auth/logout
- * @access  Authenticated
- */
-const logout = asyncHandler(async (req, res, next) => {
-  const incomingRefreshToken = req.cookies.refreshToken;
-  
-  if (req.user && incomingRefreshToken) {
-    // Remove the specific refresh token from DB
-    req.user.refreshTokens = req.user.refreshTokens.filter((rt) => rt !== incomingRefreshToken);
-    await req.user.save({ validateBeforeSave: false });
-  }
-
-  res.clearCookie('refreshToken', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-  });
-
-  res.status(200).json(successResponse({}, 'Logged out'));
+const logout = asyncHandler(async (req, res) => {
+  // Explicit all-device logout also invalidates outstanding bearer tokens.
+  await User.updateOne({ _id: req.user._id }, { $inc: { tokenVersion: 1 }, $set: { refreshTokens: [] } });
+  for (const path of ['/', '/api/auth']) res.clearCookie('refreshToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path });
+  try { require('../sockets/testSocket').getIo().in('user_' + req.user._id).disconnectSockets(true); } catch {}
+  res.json(successResponse({}, 'Logged out on all devices'));
 });
-
-/**
- * @route   GET /api/auth/me
- * @access  Authenticated
- */
-const getMe = asyncHandler(async (req, res, next) => {
-  res.status(200).json(successResponse(req.user));
-});
-
-module.exports = {
-  register,
-  login,
-  refresh,
-  logout,
-  getMe,
-};
+const getMe = asyncHandler(async (req, res) => res.json(successResponse(req.user)));
+module.exports = { register, login, refresh, logout, getMe };

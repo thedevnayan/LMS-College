@@ -27,7 +27,7 @@ export default function ClassroomDetail() {
     fetchStudents();
   }, [id]);
 
-  const fetchClassroom = async () => {
+  async function fetchClassroom() {
     try {
       const res = await classroomsAPI.getById(id);
       if (res.success) {
@@ -38,9 +38,9 @@ export default function ClassroomDetail() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const fetchStudents = async () => {
+  async function fetchStudents() {
     try {
       const res = await classroomsAPI.getStudents(id, 'limit=100');
       if (res.success) {
@@ -49,7 +49,7 @@ export default function ClassroomDetail() {
     } catch (err) {
       console.error('Failed to fetch students:', err);
     }
-  };
+  }
 
   const getEnrollUrl = () => {
     if (!classroom) return '';

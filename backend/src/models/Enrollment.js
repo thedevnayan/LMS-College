@@ -40,8 +40,6 @@ const enrollmentSchema = new mongoose.Schema(
   }
 );
 
-// TTL Index for soft deletes
-enrollmentSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
 // Ensure a student can only enroll in a classroom once
 enrollmentSchema.index(
@@ -53,5 +51,6 @@ enrollmentSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
 });
 
+enrollmentSchema.index({ classroomId: 1, deletedAt: 1, studentId: 1 });
 const Enrollment = mongoose.model('Enrollment', enrollmentSchema);
 module.exports = Enrollment;

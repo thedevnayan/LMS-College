@@ -80,7 +80,7 @@ export default function AdminLayout() {
                   whiteSpace: 'nowrap',
                 }}
               >
-                LMS Admin
+                SkillBery Admin
               </motion.span>
             )}
           </AnimatePresence>

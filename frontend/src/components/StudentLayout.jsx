@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { StudentDataProvider } from '@/context/StudentDataContext';
 import { authAPI, classroomsAPI, removeToken, SOCKET_URL } from '@/services/api';
-import { io } from 'socket.io-client';
+import { connectSocket as io } from '@/services/socket';
 import {
   LayoutDashboard, BookOpen, Clock, LogOut, User, Loader2, Search,
   CheckCircle2, FlaskConical, Zap, GraduationCap, QrCode
@@ -21,19 +21,17 @@ export default function StudentLayout({ children }) {
   const [classrooms, setClassrooms] = useState([]);
   const [loadingClassrooms, setLoadingClassrooms] = useState(true);
 
-  const fetchClassrooms = async () => {
-    try {
-      setLoadingClassrooms(true);
-      const res = await classroomsAPI.list();
-      if (res.success) {
+  const fetchClassrooms = () => {
+ return classroomsAPI.list().then((res) => {
+if (res.success) {
         setClassrooms(res.data);
       }
-    } catch (err) {
+}).catch((err) => {
       console.error('Failed to fetch classrooms', err);
-    } finally {
+    }).finally(() => {
       setLoadingClassrooms(false);
-    }
-  };
+    });
+ };
 
   useEffect(() => {
     fetchClassrooms();
@@ -50,7 +48,7 @@ export default function StudentLayout({ children }) {
       });
     });
 
-    socket.on('new_test_published', (data) => {
+    socket.on('test_hosted', (data) => {
       import('sonner').then(({ toast }) => {
         toast.success(data.message || 'A new test is available!', {
           action: {
@@ -110,13 +108,13 @@ export default function StudentLayout({ children }) {
                 </div>
               </div>
               <h2 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--color-ink)', marginBottom: '8px' }}>
-                Welcome to LMS!
+                Welcome to SkillBery!
               </h2>
               <p style={{ color: 'var(--color-fog)', fontSize: '14px', marginBottom: '8px', lineHeight: 1.5 }}>
                 To join your classes, scan the <strong>QR code</strong> shared by your professor.
               </p>
               <p style={{ color: 'var(--color-fog)', fontSize: '13px', marginBottom: '24px', lineHeight: 1.5 }}>
-                The QR code will automatically enroll you in all your semester classes.
+                New accounts need administrator identity approval. Once approved, use the invitation assigned to your account.
               </p>
               <div style={{
                 padding: '16px',
@@ -151,7 +149,7 @@ export default function StudentLayout({ children }) {
         }}>
           {/* Brand */}
           <div style={{ padding: '24px', borderBottom: '2px solid var(--color-ink)' }}>
-            <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-1px' }}>Skedio</h2>
+            <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-1px' }}>SkillBery</h2>
             <div style={{ fontSize: '13px', color: 'var(--color-fog)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', marginTop: '4px' }}>
               Student Portal
             </div>

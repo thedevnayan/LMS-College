@@ -1,7 +1,7 @@
 import CurriculumSetup from '@/views/CurriculumSetup';
 
 export const metadata = {
-  title: 'Semester Curriculum Setup | LMS College Admin',
+  title: 'Semester Curriculum Setup | SkillBery Admin',
   description: 'Manage program semester curricula, fixed subjects, credit schemes, and faculty assignments',
 };
 

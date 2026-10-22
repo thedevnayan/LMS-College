@@ -38,7 +38,7 @@ function Navbar() {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '36px' }}>
         <Link href="/" style={{ textDecoration: 'none' }}>
-          <Button variant="nav">LMS</Button>
+          <Button variant="nav">SkillBery</Button>
         </Link>
         <div style={{ display: 'flex', gap: '24px' }}>
           <a href="#features" className="text-body" style={{ textDecoration: 'none', color: 'var(--color-ink)', fontWeight: 400 }}>
@@ -296,7 +296,7 @@ function HeroSection() {
           <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', padding: '16px 20px 0' }}>
             <motion.img 
               src="/img/hero_img.png" 
-              alt="LMS College Platform Overview"
+              alt="SkillBery Platform Overview"
               whileHover={{ scale: 1.01 }}
               transition={{ duration: 0.3 }}
               style={{
@@ -571,7 +571,7 @@ function Footer() {
     <footer style={{ backgroundColor: 'var(--color-paper-white)', borderTop: '1px solid var(--color-ink)', padding: '80px 24px 40px' }}>
       <div className="max-w-screen" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '48px', marginBottom: '80px' }}>
         <div>
-          <div className="text-subheading" style={{ marginBottom: '24px' }}>LMS</div>
+          <div className="text-subheading" style={{ marginBottom: '24px' }}>SkillBery</div>
           <p className="text-body">A premium academic learning management system.</p>
         </div>
         {Object.entries(links).map(([title, items]) => (
@@ -586,7 +586,7 @@ function Footer() {
         ))}
       </div>
       <div className="max-w-screen" style={{ textAlign: 'center', borderTop: '1px solid var(--color-ink)', paddingTop: '40px' }}>
-        <p className="text-caption">© 2026 LMS Platform. All rights reserved.</p>
+        <p className="text-caption">© 2026 SkillBery Platform. All rights reserved.</p>
       </div>
     </footer>
   );

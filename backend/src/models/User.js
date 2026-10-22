@@ -15,7 +15,7 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
       match: [
-        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
         'Please add a valid email',
       ],
     },
@@ -33,6 +33,8 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    tokenVersion: { type: Number, default: 0 },
+    enrollmentApproved: { type: Boolean, default: false },
     refreshTokens: {
       type: [String],
       default: [],
@@ -43,7 +45,7 @@ const userSchema = new mongoose.Schema(
     },
     isVerified: {
       type: Boolean,
-      default: true, // Defaulting to true for MVP since no email flow exists
+      default: false, // Email ownership is not verified by public registration.
     },
     educationGap: {
       type: String,
@@ -85,6 +87,7 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
 // Transform the returned object to remove sensitive data
 userSchema.set('toJSON', {
   transform: function (doc, ret, options) {
+    delete ret.tokenVersion;
     delete ret.password;
     delete ret.refreshTokens;
     delete ret.resetPasswordToken;

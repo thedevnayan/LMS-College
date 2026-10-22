@@ -4,30 +4,13 @@ const Course = require('../models/Course');
 const MaterialProgress = require('../models/MaterialProgress');
 const asyncHandler = require('../utils/asyncHandler');
 const { successResponse } = require('../utils/response');
+const { storeFile, removeStoredFile, downloadUrl } = require('../services/fileStorage');
 const { ApiError } = require('../middleware/errorHandler');
 
 /**
  * Helper to get classroom and verify access
  */
-const getAccessDetails = async (classroomId, user) => {
-  const classroom = await Classroom.findById(classroomId).populate('courseId');
-  if (!classroom) throw new ApiError(404, 'NOT_FOUND', 'Classroom not found');
-
-  const course = classroom.courseId;
-  const isOwner = classroom.professorId.toString() === user._id.toString();
-
-  if (user.role === 'student') {
-    const Enrollment = require('../models/Enrollment');
-    const enrollment = await Enrollment.findOne({ courseId: course._id, studentId: user._id });
-    if (!enrollment) {
-      throw new ApiError(403, 'FORBIDDEN', 'Not enrolled in this course');
-    }
-  } else if (!isOwner && user.role !== 'admin') {
-    throw new ApiError(403, 'FORBIDDEN', 'Not authorized');
-  }
-
-  return { classroom, course, isOwner };
-};
+const { classroomAccess: getAccessDetails } = require('../services/access');
 
 /**
  * @route   GET /api/classrooms/:classroomId/materials
@@ -56,7 +39,7 @@ const getMaterials = asyncHandler(async (req, res, next) => {
     }));
   }
 
-  res.status(200).json(successResponse(materials));
+  res.status(200).json(successResponse(materials.map(publicMaterial)));
 });
 
 /**
@@ -82,7 +65,7 @@ const getAllMaterialsForProfessor = asyncHandler(async (req, res, next) => {
     .sort({ createdAt: -1 })
     .lean();
 
-  res.status(200).json(successResponse(materials));
+  res.status(200).json(successResponse(materials.map(publicMaterial)));
 });
 
 /**
@@ -93,19 +76,40 @@ const createMaterial = asyncHandler(async (req, res, next) => {
   await getAccessDetails(req.params.classroomId, req.user);
 
   const { title, topic, type, content, description, order } = req.body;
+  const files = req.files || (req.file ? [req.file] : []);
+  if (type === 'image' && files.length) {
+    const images = [];
+    try {
+      // Validate every image before uploading any of them.
+      for (const file of files) {
+        const detected = await require('../services/fileStorage').detectFile(file.path);
+        if (!detected.mime.startsWith('image/') || detected.mime !== file.mimetype) throw new ApiError(400, 'INVALID_FILE', 'Select valid PNG, JPEG or WebP images');
+      }
+      for (const file of files) images.push(await storeFile(file));
+      const material = await Material.create({ classroomId: req.params.classroomId, title, topic, type, content, description, order: order || 1, images });
+      return res.status(201).json(successResponse(publicMaterial(material)));
+    } catch (error) {
+      await Promise.allSettled(images.map(removeStoredFile));
+      throw error;
+    }
+  }
+  if (files.length > 1) throw new ApiError(400, 'INVALID_FILE', 'Multiple files are supported for image resources only');
+  req.file = files[0];
   let url = req.body.url;
 
   // If a file was uploaded via multer+cloudinary, it will be in req.file.path
-  if (req.file && req.file.path) {
-    url = req.file.path;
-  }
+  const storage = req.file ? await storeFile(req.file) : undefined;
+  if (storage) url = '';
+  if (url && !/^https?:\/\//i.test(url)) throw new ApiError(400, 'INVALID_URL', 'Use an HTTP or HTTPS link');
 
-  if (!url && type !== 'text') {
+  if (!url && !storage && type !== 'text') {
     return next(new ApiError(400, 'VALIDATION_ERROR', 'File or URL is required for this material type'));
   }
 
-  const material = await Material.create({
+  let material;
+  try { material = await Material.create({
     classroomId: req.params.classroomId,
+    storage,
     title,
     topic,
     type,
@@ -113,9 +117,9 @@ const createMaterial = asyncHandler(async (req, res, next) => {
     content,
     description,
     order: order || 1,
-  });
+  }); } catch (error) { await removeStoredFile(storage).catch(() => {}); throw error; }
 
-  res.status(201).json(successResponse(material));
+  res.status(201).json(successResponse(publicMaterial(material)));
 });
 
 /**
@@ -143,7 +147,7 @@ const getMaterialById = asyncHandler(async (req, res, next) => {
     material.completed = progress ? progress.completed : false;
   }
 
-  res.status(200).json(successResponse(material));
+  res.status(200).json(successResponse(publicMaterial(material)));
 });
 
 /**
@@ -159,10 +163,13 @@ const updateMaterial = asyncHandler(async (req, res, next) => {
   const { title, topic, type, content, description, order } = req.body;
   let url = req.body.url;
 
-  if (req.file && req.file.path) {
-    url = req.file.path;
-  }
+  const storage = req.file ? await storeFile(req.file) : undefined;
+  if (storage) url = '';
+  if (url && !/^https?:\/\//i.test(url)) throw new ApiError(400, 'INVALID_URL', 'Use an HTTP or HTTPS link');
 
+  const previousStorage = material.storage;
+  if (storage) material.storage = storage;
+  else if (url) material.storage = undefined;
   if (title) material.title = title;
   if (topic) material.topic = topic;
   if (type) material.type = type;
@@ -171,9 +178,10 @@ const updateMaterial = asyncHandler(async (req, res, next) => {
   if (description !== undefined) material.description = description;
   if (order !== undefined) material.order = order;
 
-  await material.save();
+  try { await material.save(); } catch (error) { await removeStoredFile(storage).catch(() => {}); throw error; }
+  if (storage || url) await removeStoredFile(previousStorage).catch(() => console.error('Storage cleanup needed for replaced material'));
 
-  res.status(200).json(successResponse(material));
+  res.status(200).json(successResponse(publicMaterial(material)));
 });
 
 /**
@@ -227,7 +235,32 @@ const markProgress = asyncHandler(async (req, res, next) => {
   res.status(200).json(successResponse(progress));
 });
 
-module.exports = {
+function publicMaterial(value) {
+  const data = value.toObject ? value.toObject() : { ...value };
+  if (data.storage?.publicId) { data.privateFile = true; data.fileFormat = data.storage.format; data.url = ''; }
+  delete data.storage;
+  if (data.images?.length) {
+    data.privateFile = true;
+    data.fileFormat = data.images[0].format;
+    data.images = data.images.map((image, index) => ({ index, name: image.originalName, format: image.format }));
+  }
+  return data;
+}
+const downloadMaterial = asyncHandler(async (req,res) => {
+  const material = await Material.findById(req.params.id);
+  if (!material) throw new ApiError(404,'NOT_FOUND','Material unavailable');
+  await getAccessDetails(material.classroomId, req.user);
+  const index = req.params.imageIndex;
+  if (index !== undefined && !/^\d+$/.test(index)) throw new ApiError(400,'INVALID_ID','Invalid image index');
+  const storage = index !== undefined ? material.images?.[Number(index)] : material.storage?.publicId ? material.storage : material.images?.[0];
+  if (!storage?.publicId) throw new ApiError(404,'NOT_FOUND','Private file unavailable');
+  const upstream = await fetch(downloadUrl(storage), { signal: AbortSignal.timeout(30000) });
+  if (!upstream.ok || !upstream.body) throw new ApiError(502,'STORAGE_UNAVAILABLE','File is unavailable; contact staff');
+  res.set({ 'Content-Type': storage.mime, 'Content-Disposition': 'inline; filename="' + storage.originalName.replace(/"/g,'_') + '"', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+  const { pipeline } = require('node:stream/promises');
+  await pipeline(require('node:stream').Readable.fromWeb(upstream.body), res);
+});
+module.exports = { downloadMaterial,
   getMaterials,
   getAllMaterialsForProfessor,
   createMaterial,

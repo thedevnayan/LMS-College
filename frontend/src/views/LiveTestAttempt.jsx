@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { testsAPI, codeAPI, SOCKET_URL } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
-import { io } from 'socket.io-client';
+import { connectSocket as io } from '@/services/socket';
 import { toast } from 'sonner';
 import { Clock, CheckSquare, AlertTriangle, WifiOff, Wifi, Play, UploadCloud } from 'lucide-react';
 import Editor from '@monaco-editor/react';
@@ -13,275 +13,102 @@ export default function LiveTestAttempt() {
   const { testId } = useParams();
   const { user } = useAuth();
   const router = useRouter();
-
   const [test, setTest] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [socket, setSocket] = useState(null);
+  const [error, setError] = useState('');
   const [connected, setConnected] = useState(false);
-  
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [turnUserId, setTurnUserId] = useState(null);
   const [questions, setQuestions] = useState([]);
-  
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(null);
   const [completed, setCompleted] = useState(false);
-  const [answeredMap, setAnsweredMap] = useState({}); // questionId -> optionIndex or "submitted" for coding
-
-  // Code editor states
+  const [answeredMap, setAnsweredMap] = useState({});
   const [code, setCode] = useState('');
   const [executing, setExecuting] = useState(false);
   const [runResult, setRunResult] = useState(null);
-
-  // ── Restore state from DB on load ──
-  const restoreState = async () => {
-    try {
-      const res = await testsAPI.getMyAttempt(testId);
-      if (res.success) {
-        const { attempt, liveState, test: testData } = res.data;
-        
-        setTest(testData);
-        setCurrentQuestionIndex(liveState.currentQuestionIndex);
-        setTurnUserId(liveState.turnUserId);
-
-        if (testData.testType === 'time-based' || testData.testType === 'standard') {
-          const seed = (testId + user._id).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-          const shuffled = [...testData.questions].sort((a, b) => {
-            const ha = (a._id || '').toString().charCodeAt(0) + seed;
-            const hb = (b._id || '').toString().charCodeAt(0) + seed;
-            return (ha % 97) - (hb % 97);
-          });
-          setQuestions(shuffled);
-        } else {
-          setQuestions(testData.questions || []);
-        }
-
-        if (attempt) {
-          setScore(attempt.score || 0);
-          setCompleted(attempt.status === 'completed' || testData.liveStatus === 'ended');
-
-          const map = {};
-          (attempt.answers || []).forEach(a => {
-            map[a.questionId] = a.mcqOptionIndex !== undefined ? a.mcqOptionIndex : 'submitted';
-          });
-          setAnsweredMap(map);
-
-          if (testData.testType === 'time-based' && testData.timeLimit > 0 && attempt.status !== 'completed') {
-            const elapsed = Math.floor((Date.now() - new Date(attempt.startedAt).getTime()) / 1000);
-            const remaining = (testData.timeLimit * 60) - elapsed;
-            setTimeLeft(remaining > 0 ? remaining : 0);
-          }
-
-          if (testData.testType === 'time-based' || testData.testType === 'standard') {
-            const answeredCount = attempt.answers?.length || 0;
-            if (answeredCount > 0 && answeredCount < testData.questions.length) {
-              setCurrentQuestionIndex(answeredCount);
-            }
-          }
-        } else {
-          if (testData.testType === 'time-based' && testData.timeLimit > 0) {
-            setTimeLeft(testData.timeLimit * 60);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Failed to restore test state:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const socketRef = useRef(null);
+  const deadlineRef = useRef(null);
+  const busyRef = useRef(false);
+  const applyState = useCallback(data => {
+    const { test: value, attempt } = data;
+    setTest(value); setQuestions(value.questions || []);
+    setTurnUserId(value.turnUserId || null);
+    const answers = Object.fromEntries((attempt?.answers || []).map(a => [a.questionId, a.mcqOptionIndex]));
+    setAnsweredMap(answers); setScore(attempt?.score || 0);
+    setCompleted(attempt?.status === 'completed' || value.liveStatus === 'ended');
+    const independent = ['standard', 'time-based'].includes(value.testType);
+    const firstOpen = (value.questions || []).findIndex(q => answers[q._id] === undefined);
+    setCurrentQuestionIndex(independent ? Math.max(0, firstOpen) : value.currentQuestionIndex);
+    const expiry = attempt?.deadlineAt || value.endTime;
+    deadlineRef.current = expiry ? performance.now() + Math.max(0, new Date(expiry).getTime() - (data.serverNow || Date.now())) : null;
+    setTimeLeft(expiry ? Math.max(0, Math.ceil((new Date(expiry).getTime() - (data.serverNow || Date.now())) / 1000)) : null);
+  }, []);
+  const restoreState = useCallback(async () => {
+    const response = await testsAPI.getMyAttempt(testId);
+    applyState(response.data);
+  }, [testId, applyState]);
   useEffect(() => {
-    restoreState();
+    if (!user?._id) return;
+    const socket = io(SOCKET_URL, { reconnection: true, reconnectionDelay: 1000, reconnectionDelayMax: 5000 });
+    socketRef.current = socket;
+    socket.on('connect', async () => {
+      try {
+        const response = await socket.timeout(15000).emitWithAck('join_test', { testId });
+        if (!response.success) throw new Error(response.error.message);
+        applyState(response.data); setConnected(true); setError('');
+      } catch (err) { setError(err.message); } finally { setLoading(false); }
+    });
+    socket.on('connect_error', err => { setError(err.message); setLoading(false); });
+    socket.on('disconnect', () => setConnected(false));
+    socket.on('session_replaced', () => setError('This test was opened in another tab. Close it there before reconnecting here.'));
+    socket.on('operation_error', err => toast.error(err.message));
+    for (const event of ['test_started', 'go_next_question', 'test_ended']) socket.on(event, () => restoreState().catch(err => setError(err.message)));
+    return () => { socket.disconnect(); socketRef.current = null; };
+  }, [user?._id, testId, applyState, restoreState]);
+  const handleCompleteTest = useCallback(async () => {
+    const socket = socketRef.current;
+    if (!socket?.connected || busyRef.current) return;
+    busyRef.current = true;
+    try {
+      const response = await socket.timeout(15000).emitWithAck('test_completed', { testId });
+      if (!response.success) throw new Error(response.error.message);
+      setScore(response.data.finalScore); setCompleted(true);
+    } catch (err) { toast.error('Completion not confirmed: ' + err.message); }
+    finally { busyRef.current = false; }
   }, [testId]);
-
-  // Handle setting initial code template when question changes
   useEffect(() => {
-    const currentQ = questions[currentQuestionIndex];
-    if (currentQ && currentQ.questionType === 'coding') {
-      setCode(currentQ.codingTemplate || '');
-      setRunResult(null);
-    }
-  }, [currentQuestionIndex, questions]);
-
-  // ── Socket connection ──
-  useEffect(() => {
-    if (!user || !testId || loading) return;
-
-    const newSocket = io(SOCKET_URL, {
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-    });
-    setSocket(newSocket);
-
-    newSocket.on('connect', () => {
-      setConnected(true);
-      newSocket.emit('join_test', {
-        testId,
-        userId: user._id,
-        userName: user.name,
-        role: 'student'
-      });
-    });
-
-    newSocket.on('disconnect', () => {
-      setConnected(false);
-    });
-
-    newSocket.on('test_started', () => {
-      setTest(prev => ({ ...prev, liveStatus: 'in-progress' }));
-    });
-
-    newSocket.on('test_ended', () => {
-      setTest(prev => ({ ...prev, liveStatus: 'ended' }));
-      handleCompleteTest();
-      toast.info('The teacher has ended the test.');
-    });
-
-    newSocket.on('student_answered', (data) => {
-      if (data.userId.toString() === user._id.toString()) {
-        setScore(data.currentScore);
-        if (data.points > 0 && test?.testType === 'live-fastest-finger') {
-          toast.success(`You earned ${data.points} points!`, { style: { fontWeight: 800 } });
-        }
-      }
-    });
-
-    newSocket.on('go_next_question', (data) => {
-      setCurrentQuestionIndex(data.nextQuestionIndex);
-      if (data.turnUserId) {
-        setTurnUserId(data.turnUserId);
-      }
-    });
-
-    return () => newSocket.disconnect();
-  }, [testId, user, loading]);
-
-  // ── Timer ──
-  useEffect(() => {
-    if (timeLeft === null || completed) return;
-    if (timeLeft <= 0) {
-      handleCompleteTest();
-      return;
-    }
-    const timerId = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
-    return () => clearInterval(timerId);
-  }, [timeLeft, completed]);
-
-  const handleAnswerSubmit = (optionIndex) => {
-    if (!socket || completed) return;
-    const currentQ = questions[currentQuestionIndex];
-    if (!currentQ || answeredMap[currentQ._id] !== undefined) return;
-
-    // Let the socket handle score increment natively, we just optimistically update UI for the option
-    setAnsweredMap(prev => ({ ...prev, [currentQ._id]: optionIndex }));
-
-    socket.emit('submit_answer', {
-      testId,
-      userId: user._id,
-      userName: user.name,
-      role: 'student',
-      questionId: currentQ._id,
-      selectedOption: optionIndex
-    });
-
-    autoAdvance();
-  };
-
-  const handleCodeRun = async () => {
-    const currentQ = questions[currentQuestionIndex];
-    if (!currentQ) return;
-    
-    // Pick the first visible test case to run against
-    const visibleTestCase = currentQ.testCases?.find(tc => !tc.isHidden);
-    
-    setExecuting(true);
-    try {
-      const res = await codeAPI.run({
-        language: currentQ.codingLanguage || 'javascript',
-        code: code,
-        input: visibleTestCase ? visibleTestCase.input : ''
-      });
-      if (res.success) {
-        setRunResult({
-          type: 'run',
-          data: res.data,
-          expected: visibleTestCase ? visibleTestCase.expectedOutput : null
-        });
-      }
-    } catch (err) {
-      setRunResult({ type: 'error', error: err.message });
-    } finally {
-      setExecuting(false);
-    }
-  };
-
-  const handleCodeSubmit = async () => {
-    if (!socket || completed) return;
-    const currentQ = questions[currentQuestionIndex];
-    if (!currentQ || answeredMap[currentQ._id] !== undefined) return;
-
-    setExecuting(true);
-    try {
-      const res = await codeAPI.submit(testId, currentQ._id, {
-        language: currentQ.codingLanguage || 'javascript',
-        code: code
-      });
-      
-      if (res.success) {
-        const { isCorrect, pointsAwarded, results } = res.data;
-        
-        setRunResult({ type: 'submit', results, isCorrect, pointsAwarded });
-        
-        const newScore = score + pointsAwarded;
-        setScore(newScore);
-        setAnsweredMap(prev => ({ ...prev, [currentQ._id]: 'submitted' }));
-
-        socket.emit('submit_answer', {
-          testId,
-          userId: user._id,
-          userName: user.name,
-          role: 'student',
-          questionId: currentQ._id,
-          codingSourceCode: code
-        });
-
-        setTimeout(() => autoAdvance(), 2000);
-      }
-    } catch (err) {
-      setRunResult({ type: 'error', error: err.message });
-    } finally {
-      setExecuting(false);
-    }
-  };
-
-  const autoAdvance = () => {
-    if (test.testType === 'time-based' || test.testType === 'standard') {
-      if (currentQuestionIndex < questions.length - 1) {
-        setCurrentQuestionIndex(prev => prev + 1);
-      } else {
-        handleCompleteTest();
-      }
-    }
-  };
-
-  const handleCompleteTest = () => {
     if (completed) return;
-    setCompleted(true);
-    
-    if (socket) {
-      socket.emit('test_completed', {
-        testId,
-        userId: user._id,
-        userName: user.name,
-        role: 'student'
-      });
-    }
+    const timer = setInterval(() => {
+      if (deadlineRef.current === null) return;
+      const remaining = Math.max(0, Math.ceil((deadlineRef.current - performance.now()) / 1000));
+      setTimeLeft(remaining);
+      if (!remaining) handleCompleteTest();
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [completed, handleCompleteTest]);
+  const handleAnswerSubmit = async optionIndex => {
+    const socket = socketRef.current;
+    const question = questions[currentQuestionIndex];
+    if (!socket?.connected || completed || !question || busyRef.current || answeredMap[question._id] !== undefined) return;
+    busyRef.current = true; setExecuting(true);
+    try {
+      const response = await socket.timeout(15000).emitWithAck('submit_answer', { testId, questionId: question._id, selectedOption: optionIndex });
+      if (!response.success) throw new Error(response.error.message);
+      setAnsweredMap(prev => ({ ...prev, [question._id]: optionIndex }));
+      setScore(response.data.currentScore || 0);
+      toast.success('Answer saved');
+      if (['standard', 'time-based'].includes(test.testType)) {
+        if (currentQuestionIndex < questions.length - 1) setCurrentQuestionIndex(index => index + 1);
+        else { busyRef.current = false; await handleCompleteTest(); }
+      }
+    } catch (err) { toast.error('Answer not confirmed. Retry safely: ' + err.message); }
+    finally { busyRef.current = false; setExecuting(false); }
   };
-
-  if (loading || !test) return <div className="admin-spinner" style={{ margin: '100px auto' }} />;
+  const handleCodeRun = () => setRunResult({ type: 'error', error: 'Coding execution is unavailable until an isolated judge is configured.' });
+  const handleCodeSubmit = handleCodeRun;
+  if (error && !test) return <div role="alert" style={{ padding: 32 }}>{error}<button onClick={() => router.push('/dashboard')}>Back to dashboard</button></div>;
+  if (loading || !test || !user) return <div className="admin-spinner" style={{ margin: '100px auto' }} />;
 
   if (completed) {
     return (
@@ -290,6 +117,7 @@ export default function LiveTestAttempt() {
         <h1 style={{ fontSize: '32px', color: 'var(--color-ink)', marginBottom: '16px' }}>Test Completed!</h1>
         <div style={{ fontSize: '48px', fontWeight: 900, color: '#16a34a', marginBottom: '8px' }}>{score}</div>
         <p style={{ color: 'var(--color-fog)', fontSize: '18px', marginBottom: '32px' }}>Your score has been saved successfully.</p>
+        <button onClick={() => router.push(`/tests/${testId}/report`)} className="admin-btn-primary" style={{ marginBottom: 16 }}>View Full Report</button>
         <button onClick={() => router.push('/dashboard')} className="admin-btn-primary" style={{ padding: '16px 32px', fontSize: '18px' }}>
           Back to Dashboard
         </button>
@@ -304,7 +132,7 @@ export default function LiveTestAttempt() {
   const formatTime = (secs) => `${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, '0')}`;
 
   const isCoding = currentQ.questionType === 'coding';
-  const isAnswered = answeredMap[currentQ._id] !== undefined;
+  const isAnswered = answeredMap[currentQ._id] !== undefined || executing || !connected || (test.testType !== 'standard' && test.liveStatus !== 'in-progress');
 
   return (
     <div style={{ maxWidth: isCoding ? '1400px' : '800px', margin: '40px auto', padding: '0 20px' }}>
@@ -347,7 +175,7 @@ export default function LiveTestAttempt() {
       {!isMyTurn ? (
         <div style={{ padding: '60px', backgroundColor: '#eff6ff', borderRadius: '24px', border: '2px dashed #3b82f6', textAlign: 'center' }}>
           <Clock size={48} color="#3b82f6" style={{ marginBottom: '16px' }} />
-          <h3 style={{ fontSize: '24px', color: '#1d4ed8', marginBottom: '8px' }}>It's someone else's turn!</h3>
+          <h3 style={{ fontSize: '24px', color: '#1d4ed8', marginBottom: '8px' }}>It&apos;s someone else&apos;s turn!</h3>
           <p style={{ color: '#3b82f6', fontSize: '16px' }}>Please wait until it is your turn to answer.</p>
         </div>
       ) : (

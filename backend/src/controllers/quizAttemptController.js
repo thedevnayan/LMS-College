@@ -11,7 +11,7 @@ const { ApiError } = require('../middleware/errorHandler');
  * Validates access, time limits, and calculates score
  */
 const processAttempt = async (attempt, quiz, finalize = false) => {
-  const timeLimitMs = (quiz.duration * 60 * 1000) + 60000; // 60 sec grace period
+  const timeLimitMs = (quiz.duration * 60 * 1000); // Server-authoritative deadline
   const timeTaken = Date.now() - attempt.startedAt.getTime();
 
   if (timeTaken > timeLimitMs) {
@@ -27,6 +27,13 @@ const processAttempt = async (attempt, quiz, finalize = false) => {
       qMap[q._id.toString()] = { correct: q.correctAnswerIndex, marks: q.marks };
     });
 
+    // Validate each question once; duplicate IDs must never multiply marks.
+    const seen = new Set();
+    for (const ans of attempt.answers) {
+      const q = quiz.questions.id(ans.questionId);
+      if (!q || seen.has(String(ans.questionId)) || !Number.isInteger(ans.selectedIndex) || ans.selectedIndex < 0 || ans.selectedIndex >= q.options.length) throw new ApiError(400, 'INVALID_ANSWERS', 'Invalid or duplicate answer');
+      seen.add(String(ans.questionId));
+    }
     // Calculate score
     attempt.answers.forEach(ans => {
       const q = qMap[ans.questionId.toString()];
@@ -94,10 +101,12 @@ const autosaveAttempt = asyncHandler(async (req, res, next) => {
   
   await processAttempt(attempt, quiz, false); // Throws if time expired
 
+  if (req.body.answers && (!Array.isArray(req.body.answers) || req.body.answers.length > 200)) throw new ApiError(400, 'INVALID_ANSWERS', 'Invalid answers');
   const { answers } = req.body;
   if (answers) {
     attempt.answers = answers;
-    await attempt.save();
+    const saved = await QuizAttempt.updateOne({ _id: attempt._id, status: 'in_progress', __v: attempt.__v }, { $set: { answers: attempt.answers }, $inc: { __v: 1 } });
+    if (!saved.modifiedCount) throw new ApiError(409, 'STALE_STATE', 'Attempt changed; reload before saving');
   }
 
   res.status(200).json(successResponse(attempt));

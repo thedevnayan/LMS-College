@@ -12,24 +12,22 @@ export function AcademicProvider({ children }) {
   const [activeSession, setActiveSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchSessions = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await academicAPI.getSessions();
-      if (res.success && Array.isArray(res.data)) {
+  const fetchSessions = useCallback(() => {
+ return academicAPI.getSessions().then((res) => {
+if (res.success && Array.isArray(res.data)) {
         setSessions(res.data);
         // Default to current active session or first session
         const current = res.data.find(s => s.isCurrent) || res.data.find(s => s.status === 'Active') || res.data[0];
         if (current) {
-          setActiveSession(prev => prev || current);
+          setActiveSession(prev => res.data.find(s => s._id === prev?._id) || current);
         }
       }
-    } catch (err) {
+}).catch((err) => {
       console.error('Failed to fetch academic sessions:', err);
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
-  }, []);
+    });
+ }, []);
 
   // Only fetch sessions once auth is resolved and user is authenticated
   useEffect(() => {
@@ -37,11 +35,6 @@ export function AcademicProvider({ children }) {
 
     if (isAuthenticated) {
       fetchSessions();
-    } else {
-      // User logged out — reset state
-      setSessions([]);
-      setActiveSession(null);
-      setLoading(false);
     }
   }, [isAuthenticated, authLoading, fetchSessions]);
 
@@ -55,12 +48,12 @@ export function AcademicProvider({ children }) {
   return (
     <AcademicContext.Provider
       value={{
-        sessions,
-        activeSession,
+        sessions: isAuthenticated ? sessions : [],
+        activeSession: isAuthenticated ? activeSession : null,
         setActiveSession,
         switchSession,
         refreshSessions: fetchSessions,
-        loading,
+        loading: isAuthenticated && loading,
       }}
     >
       {children}

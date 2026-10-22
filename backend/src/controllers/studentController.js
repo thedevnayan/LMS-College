@@ -1,3 +1,4 @@
+const { maximumScore } = require('../services/assessmentStats');
 const User = require('../models/User');
 const Classroom = require('../models/Classroom');
 const Enrollment = require('../models/Enrollment');
@@ -52,7 +53,7 @@ const getTeacherStudents = asyncHandler(async (req, res, next) => {
 
   // If admin, also include all registered students even if not in a legacy classroom
   if (req.user.role === 'admin') {
-    const allStudents = await User.find({ role: 'student' }).select('name email avatarUrl educationGap admissionYear qualification');
+    const allStudents = await User.find({ role: 'student' }).select('name email avatarUrl educationGap admissionYear qualification enrollmentApproved');
     allStudents.forEach(st => {
       const sId = st._id.toString();
       if (!studentMap[sId]) {
@@ -79,8 +80,8 @@ const getTeacherStudents = asyncHandler(async (req, res, next) => {
   const testIds = tests.map(t => t._id);
 
   const maxMarksMap = {};
-  assignments.forEach(a => maxMarksMap[a._id.toString()] = a.maxMarks || 100);
-  tests.forEach(t => maxMarksMap[t._id.toString()] = t.maxMarks || 100);
+  assignments.forEach(a => maxMarksMap[a._id.toString()] = a.maxMarks ?? 0);
+  tests.forEach(t => maxMarksMap[t._id.toString()] = maximumScore(t));
 
   const allSubmissions = await Submission.find({ assignmentId: { $in: assignmentIds }, status: 'graded' });
   const allTestAttempts = await TestAttempt.find({ testId: { $in: testIds }, status: 'completed' });
@@ -125,7 +126,7 @@ const getStudentProfile = asyncHandler(async (req, res, next) => {
   }
 
   const studentId = req.params.id;
-  const student = await User.findById(studentId).select('name email avatarUrl educationGap admissionYear qualification');
+  const student = await User.findById(studentId).select('name email avatarUrl educationGap admissionYear qualification enrollmentApproved');
   if (!student) {
     return next(new ApiError(404, 'NOT_FOUND', 'Student not found'));
   }
@@ -148,7 +149,7 @@ const getStudentProfile = asyncHandler(async (req, res, next) => {
   const testIds = tests.map(t => t._id);
 
   const submissions = await Submission.find({ studentId, assignmentId: { $in: assignmentIds } }).populate('assignmentId', 'title maxMarks dueDate classroomId');
-  const testAttempts = await TestAttempt.find({ studentId, testId: { $in: testIds } }).populate('testId', 'title maxMarks scheduledAt classroomId');
+  const testAttempts = await TestAttempt.find({ studentId, testId: { $in: testIds } }).populate('testId', 'title questions testType fastestBonusPoints scheduledAt classroomId');
 
   const chartData = [];
   
@@ -158,7 +159,7 @@ const getStudentProfile = asyncHandler(async (req, res, next) => {
         name: sub.assignmentId.title,
         date: sub.submittedAt || sub.updatedAt,
         score: sub.marks,
-        maxScore: sub.assignmentId.maxMarks || 100,
+        maxScore: sub.assignmentId.maxMarks ?? 0,
         type: 'Assignment'
       });
     }
@@ -170,7 +171,7 @@ const getStudentProfile = asyncHandler(async (req, res, next) => {
         name: ta.testId.title,
         date: ta.endTime || ta.updatedAt,
         score: ta.score,
-        maxScore: ta.testId.maxMarks || 100,
+        maxScore: maximumScore(ta.testId),
         type: 'Test'
       });
     }

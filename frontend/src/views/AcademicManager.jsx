@@ -30,7 +30,7 @@ export default function AcademicManager() {
     fetchData();
   }, [activeSession]);
 
-  const fetchData = async () => {
+  async function fetchData() {
     try {
       setLoading(true);
       const [progRes, batchRes, offRes, sessRes, courseRes] = await Promise.all([
@@ -52,7 +52,7 @@ export default function AcademicManager() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   const openCreateModal = (type) => {
     setModalType(type);

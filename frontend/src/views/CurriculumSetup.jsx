@@ -81,7 +81,7 @@ export default function CurriculumSetup() {
     loadInitialData();
   }, [isAuthenticated, authLoading]);
 
-  const loadInitialData = async () => {
+  async function loadInitialData() {
     try {
       setLoading(true);
       const [progsRes, coursesRes, facultyRes] = await Promise.all([
@@ -110,7 +110,7 @@ export default function CurriculumSetup() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   // When Program changes, load periods & curriculum
   useEffect(() => {
@@ -118,7 +118,7 @@ export default function CurriculumSetup() {
     loadProgramCurriculum(selectedProgramId);
   }, [selectedProgramId]);
 
-  const loadProgramCurriculum = async (programId) => {
+  async function loadProgramCurriculum(programId) {
     try {
       const [periodsRes, currRes] = await Promise.all([
         academicAPI.getPeriods(`programId=${programId}`),
@@ -145,7 +145,7 @@ export default function CurriculumSetup() {
       console.error('Failed to load program curriculum:', err);
       toast.error('Failed to load curriculum subjects');
     }
-  };
+  }
 
   // Load batches and allocations for the selected semester + active session
   useEffect(() => {
@@ -153,7 +153,7 @@ export default function CurriculumSetup() {
     loadSemesterBatchesAndAllocations();
   }, [selectedProgramId, selectedPeriodId, activeSession]);
 
-  const loadSemesterBatchesAndAllocations = async () => {
+  async function loadSemesterBatchesAndAllocations() {
     try {
       const [batchesRes, allocRes] = await Promise.all([
         academicAPI.getBatches(`programId=${selectedProgramId}&academicPeriodId=${selectedPeriodId}&academicSessionId=${activeSession._id}`),
@@ -182,7 +182,7 @@ export default function CurriculumSetup() {
     } catch (err) {
       console.error('Failed to load batches or allocations:', err);
     }
-  };
+  }
 
   // Selected Program object
   const selectedProgram = useMemo(() => {
@@ -1135,7 +1135,7 @@ export default function CurriculumSetup() {
                 No Teaching Batches in {selectedPeriod?.name} ({activeSession?.name || 'Session'})
               </h3>
               <p style={{ fontSize: '13px', color: 'var(--color-fog)', maxWidth: '500px', margin: '0 auto 16px auto' }}>
-                Create teaching batches (e.g. "Batch A", "Batch B" with practical sub-batches like B1, B2) in Academic Setup to allocate faculty for this semester.
+                Create teaching batches (e.g. &quot;Batch A&quot;, &quot;Batch B&quot; with practical sub-batches like B1, B2) in Academic Setup to allocate faculty for this semester.
               </p>
               <a
                 href="/admin/academic"
@@ -1170,7 +1170,7 @@ export default function CurriculumSetup() {
                 No subjects defined for {selectedPeriod?.name}
               </h3>
               <p style={{ fontSize: '13px', color: 'var(--color-fog)', marginBottom: '14px' }}>
-                Please add subjects in the "Semester Scheme & Subjects" tab first!
+                Please add subjects in the &quot;Semester Scheme & Subjects&quot; tab first!
               </p>
               <button
                 onClick={() => setActiveViewTab('scheme')}
@@ -1572,7 +1572,7 @@ export default function CurriculumSetup() {
                     </label>
                     {availableCatalogCourses.length === 0 ? (
                       <p style={{ fontSize: '13px', color: '#b91c1c', padding: '8px', backgroundColor: '#fee2e2', borderRadius: '6px', border: '1px solid #ef4444' }}>
-                        All catalog courses have already been added to this semester. Switch to "Create New Subject" to define a new one!
+                        All catalog courses have already been added to this semester. Switch to &quot;Create New Subject&quot; to define a new one!
                       </p>
                     ) : (
                       <select

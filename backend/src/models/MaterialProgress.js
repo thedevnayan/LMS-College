@@ -35,7 +35,6 @@ const materialProgressSchema = new mongoose.Schema(
   }
 );
 
-materialProgressSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 materialProgressSchema.index(
   { studentId: 1, materialId: 1 }, 
   { unique: true, partialFilterExpression: { deletedAt: null } }

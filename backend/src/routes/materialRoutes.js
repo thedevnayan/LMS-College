@@ -18,7 +18,7 @@ router.route('/')
   })
   .post(
     authorize('professor'),
-    upload.single('file'), // Handle file upload
+    upload.array('file'),
     validate([
       body('title').trim().notEmpty().withMessage('Title is required'),
       body('topic').trim().notEmpty().withMessage('Topic is required'),
@@ -35,6 +35,9 @@ router.route('/:id')
     materialController.updateMaterial
   )
   .delete(authorize('professor'), materialController.deleteMaterial);
+
+router.get('/:id/file', materialController.downloadMaterial);
+router.get('/:id/images/:imageIndex', materialController.downloadMaterial);
 
 router.post('/:id/progress', authorize('student'), materialController.markProgress);
 

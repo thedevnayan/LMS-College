@@ -3,10 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { assignmentsAPI } from '@/services/api';
+import StudentReport from '@/components/StudentReport';
+import reportStyles from '@/components/StudentReport.module.css';
 import { ArrowLeft, FileText, CheckCircle, Clock, Send } from 'lucide-react';
 
 export default function StudentAssignmentView() {
-  const { classroomId, assignmentId } = useParams();
+  const { id: classroomId, assignmentId } = useParams();
   const router = useRouter();
 
   const [assignment, setAssignment] = useState(null);
@@ -19,6 +21,15 @@ export default function StudentAssignmentView() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [reportError, setReportError] = useState('');
+
+  useEffect(() => {
+    if (!submitSuccess) return;
+    let active = true;
+    assignmentsAPI.getById(assignmentId).then(res => { if (active) setAssignment(res.data); })
+      .catch(err => { if (active) setReportError(err.message || 'Reload to view your saved report.'); });
+    return () => { active = false; };
+  }, [assignmentId, submitSuccess]);
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
@@ -97,6 +108,8 @@ export default function StudentAssignmentView() {
   }
 
   const isLate = new Date() > new Date(assignment.dueDate);
+  const questionWeight = q => Number.isFinite(q.marks) && q.marks >= 0 ? q.marks : 1;
+  const totalWeight = (assignment.questions || []).reduce((sum, q) => sum + questionWeight(q), 0);
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
@@ -107,7 +120,7 @@ export default function StudentAssignmentView() {
         <ArrowLeft size={18} /> Back to Classroom
       </button>
 
-      <div style={{ backgroundColor: 'var(--color-paper-white)', padding: '40px', borderRadius: '24px', border: '2px solid var(--color-ink)', boxShadow: '8px 8px 0px var(--color-ink)' }}>
+      <div className={reportStyles.assignmentCard}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '24px', marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{ padding: '16px', backgroundColor: '#fef3c7', borderRadius: '20px', border: '2px solid var(--color-ink)' }}>
@@ -127,11 +140,11 @@ export default function StudentAssignmentView() {
         </div>
 
         {submitSuccess ? (
-          <div style={{ padding: '40px', backgroundColor: '#dcfce7', borderRadius: '24px', border: '3px solid #166534', color: '#166534', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px', textAlign: 'center', marginTop: '24px' }}>
+          <><div style={{ padding: '24px', backgroundColor: '#dcfce7', borderRadius: '24px', border: '3px solid #166534', color: '#166534', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px', textAlign: 'center', marginTop: '24px' }}>
             <CheckCircle size={64} />
             <div>
               <div style={{ fontWeight: 900, fontSize: '28px', marginBottom: '8px', letterSpacing: '-0.5px' }}>Assignment Submitted!</div>
-              <div style={{ fontSize: '16px', fontWeight: 600, opacity: 0.8 }}>Your professor will grade it soon.</div>
+              <div style={{ fontSize: '16px', fontWeight: 600, opacity: 0.8 }}>{assignment.submission?.status === 'graded' ? 'Your graded report is available below.' : 'Your submission is saved. Teacher grading is pending.'}</div>
             </div>
             <button 
               onClick={() => router.push(`/classrooms/${classroomId}`)}
@@ -141,6 +154,18 @@ export default function StudentAssignmentView() {
               Back to Classroom
             </button>
           </div>
+          {reportError && <p role="alert">{reportError}</p>}
+          {assignment.submission && <StudentReport heading="Assignment Report" report={{
+            description: assignment.description, ...assignment.submission,
+            score: assignment.submission.marks, maximumScore: assignment.maxMarks,
+            completedAt: assignment.submission.submittedAt,
+            gradingNote: assignment.questions?.length ? 'Question points show automatic marking. The total score includes any teacher adjustments.' : '',
+            questions: (assignment.questions || []).map((q, i) => {
+              const selectedOption = assignment.submission.answers?.[i] ?? null;
+              const maximumPoints = totalWeight ? questionWeight(q) / totalWeight * assignment.maxMarks : 0;
+              return { ...q, selectedOption, maximumPoints, pointsAwarded: selectedOption === q.correctOptionIndex ? maximumPoints : 0 };
+            }),
+          }} />}</>
         ) : (
           <>
             <div style={{ padding: '24px', backgroundColor: '#f8f9fa', borderRadius: '16px', border: '1px dashed var(--color-fog)', marginBottom: '40px' }}>

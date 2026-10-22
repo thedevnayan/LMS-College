@@ -21,9 +21,16 @@ const joinValidation = [
 router.use(protect); // All routes require authentication
 
 // Batch join codes for single-code onboarding
-router.get('/batch-codes', classroomController.getBatchCodes);
-router.patch('/batch-codes/:id/toggle-login', authorize('admin', 'professor'), classroomController.toggleBatchLogin);
+router.get('/batch-codes', authorize('admin'), classroomController.getBatchCodes);
+router.patch('/batch-codes/:id/toggle-login', authorize('admin'), classroomController.toggleBatchLogin);
 
+const asyncHandler = require('../utils/asyncHandler');
+router.patch('/batch-access', authorize('admin'), asyncHandler(async (req,res) => {
+  res.json({ success: true, data: await require('../services/batchAdministration').setBatchAccess(req.body.batchCodeIds, req.body.loginEnabled, req.user) });
+}));
+router.patch('/batch-codes/:id/invitation', authorize('admin'), asyncHandler(async (req,res) => {
+  res.json({ success: true, data: await require('../services/batchAdministration').updateInvitation(req.params.id, req.body, req.user) });
+}));
 // Student join route (must be before /:id routes)
 router.post('/join', authorize('student'), validate(joinValidation), classroomController.joinClassroom);
 

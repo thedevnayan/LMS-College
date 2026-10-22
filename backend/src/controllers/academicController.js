@@ -401,6 +401,9 @@ const enrollStudent = asyncHandler(async (req, res, next) => {
 
 // ─── GET STUDENTS IN A TEACHING GROUP / BATCH ───
 const getBatchStudents = asyncHandler(async (req, res, next) => {
+  if (req.user.role !== 'admin' && !await CourseOffering.exists({ teachingGroupId: req.params.batchId, primaryTeacherId: req.user._id })) {
+    throw new ApiError(403, 'FORBIDDEN', 'Only assigned faculty can view this batch roster');
+  }
   const { batchId } = req.params;
   const enrollments = await StudentEnrollment.find({
     teachingGroupId: batchId,
@@ -427,337 +430,15 @@ const getBatchStudents = asyncHandler(async (req, res, next) => {
 });
 
 // ─── STANDALONE BATCH PROMOTION ───
-const promoteBatch = asyncHandler(async (req, res, next) => {
-  const {
-    sourceBatchId,
-    targetSessionId,
-    targetProgramId,
-    targetCohortId,
-    targetPeriodId,
-    targetBatchId,
-    targetBatchName,
-    selectedStudentIds,
-    excludedStudentIds = [],
-  } = req.body;
-
-  if (!sourceBatchId || !targetSessionId || !targetPeriodId) {
-    return next(new ApiError(400, 'VALIDATION_ERROR', 'sourceBatchId, targetSessionId, and targetPeriodId are required'));
-  }
-
-  const targetSession = await AcademicSession.findById(targetSessionId);
-  if (!targetSession) return next(new ApiError(404, 'NOT_FOUND', 'Target session not found'));
-
-  const sourceFilter = {
-    teachingGroupId: sourceBatchId,
-    status: 'Active',
-  };
-
-  if (Array.isArray(selectedStudentIds) && selectedStudentIds.length > 0) {
-    sourceFilter.studentId = { $in: selectedStudentIds, $nin: excludedStudentIds };
-  } else if (Array.isArray(excludedStudentIds) && excludedStudentIds.length > 0) {
-    sourceFilter.studentId = { $nin: excludedStudentIds };
-  }
-
-  const sourceEnrollments = await StudentEnrollment.find(sourceFilter);
-  if (sourceEnrollments.length === 0) {
-    return res.status(200).json(successResponse([], 'No active students found in this batch to promote'));
-  }
-
-  const programToUse = targetProgramId || sourceEnrollments[0].programId;
-  const cohortToUse = targetCohortId || sourceEnrollments[0].cohortId;
-
-  let finalTargetBatchId = targetBatchId;
-  if (!finalTargetBatchId || finalTargetBatchId === 'NEW') {
-    const batchName = targetBatchName || 'Batch A';
-    let targetGroup = await TeachingGroup.findOne({
-      academicSessionId: targetSession._id,
-      programId: programToUse,
-      academicPeriodId: targetPeriodId,
-      name: batchName,
-    });
-    if (!targetGroup) {
-      targetGroup = await TeachingGroup.create({
-        institutionId: targetSession.institutionId,
-        programId: programToUse,
-        cohortId: cohortToUse,
-        academicSessionId: targetSession._id,
-        academicPeriodId: targetPeriodId,
-        name: batchName,
-      });
-    }
-    finalTargetBatchId = targetGroup._id;
-  }
-
-  // Resolve target semester course offerings (from session offerings or auto-generated from curriculum)
-  let targetOfferings = await CourseOffering.find({
-    academicSessionId: targetSession._id,
-    programId: programToUse,
-    academicPeriodId: targetPeriodId,
-  });
-
-  if (targetOfferings.length === 0) {
-    const currSubjects = await Curriculum.find({
-      programId: programToUse,
-      academicPeriodId: targetPeriodId,
-    }).populate('courseId');
-
-    if (currSubjects.length > 0) {
-      const defaultProf = (await User.findOne({ role: 'professor' })) || req.user;
-      for (const cs of currSubjects) {
-        const off = await CourseOffering.create({
-          courseId: cs.courseId?._id || cs.courseId,
-          academicSessionId: targetSession._id,
-          programId: programToUse,
-          academicPeriodId: targetPeriodId,
-          departmentId: cs.courseId?.departmentId || null,
-          primaryTeacherId: cs.defaultTeacherId || cs.courseId?.professorId || defaultProf._id,
-          status: 'Active',
-        });
-        targetOfferings.push(off);
-      }
-    }
-  }
-
-  const results = [];
-  for (const oldEnr of sourceEnrollments) {
-    oldEnr.status = 'Promoted';
-    oldEnr.promotedAt = new Date();
-    await oldEnr.save();
-
-    const newEnr = await StudentEnrollment.create({
-      studentId: oldEnr.studentId,
-      institutionId: targetSession.institutionId,
-      programId: programToUse,
-      cohortId: cohortToUse,
-      academicSessionId: targetSession._id,
-      academicPeriodId: targetPeriodId,
-      teachingGroupId: finalTargetBatchId,
-      status: 'Active',
-      educationGap: 'None (Continuous Enrollment)',
-    });
-
-    // Auto-enroll in target semester subjects
-    for (const off of targetOfferings) {
-      const cm = await CourseMembership.findOne({ studentId: oldEnr.studentId, courseOfferingId: off._id });
-      if (!cm) {
-        await CourseMembership.create({
-          studentEnrollmentId: newEnr._id,
-          studentId: oldEnr.studentId,
-          courseOfferingId: off._id,
-          teachingGroupId: finalTargetBatchId,
-          status: 'Enrolled',
-        });
-      }
-    }
-
-    results.push({
-      studentId: oldEnr.studentId,
-      newEnrollmentId: newEnr._id,
-    });
-  }
-
-  await logAudit({
-    actor: req.user,
-    action: 'BATCH_PROMOTED',
-    entity: 'TeachingGroup',
-    entityId: finalTargetBatchId,
-    metadata: {
-      sourceBatchId,
-      promotedCount: results.length,
-      targetSession: targetSession.name,
-    }
-  });
-
-  res.status(200).json(successResponse(results, `Successfully promoted ${results.length} student(s) to the target batch`));
+const promoteBatch = asyncHandler(async (req,res) => {
+  const result = await require('../services/promotion').promoteBatch(req.body, req.user);
+  res.json(successResponse(result, 'Promotion completed; historical records retained'));
 });
 
 // ─── SESSION ROLLOVER & STUDENT PROMOTION (CRITICAL WORKFLOW) ───
-const rolloverSession = asyncHandler(async (req, res, next) => {
-  const {
-    currentSessionId,
-    newSessionName,
-    newStartDate,
-    newEndDate,
-    promotions = [],
-    batchPromotions = [],
-  } = req.body;
-
-  if (!currentSessionId || !newSessionName || !newStartDate || !newEndDate) {
-    return next(new ApiError(400, 'VALIDATION_ERROR', 'currentSessionId, newSessionName, newStartDate, and newEndDate are required'));
-  }
-
-  const currentSession = await AcademicSession.findById(currentSessionId);
-  if (!currentSession) return next(new ApiError(404, 'NOT_FOUND', 'Current session not found'));
-
-  // 1. Mark current session as Completed
-  currentSession.status = 'Completed';
-  currentSession.isCurrent = false;
-  await currentSession.save();
-
-  // 2. Create and Activate new academic session
-  const newSession = await AcademicSession.create({
-    institutionId: currentSession.institutionId,
-    name: newSessionName,
-    startDate: new Date(newStartDate),
-    endDate: new Date(newEndDate),
-    status: 'Active',
-    isCurrent: true,
-  });
-
-  // Ensure no other session is marked current
-  await AcademicSession.updateMany({ _id: { $ne: newSession._id } }, { isCurrent: false });
-
-  const promotionResults = [];
-
-  // 3a. Process Batch-Level Promotions (all students in a batch)
-  if (Array.isArray(batchPromotions) && batchPromotions.length > 0) {
-    for (const bp of batchPromotions) {
-      const {
-        sourceBatchId,
-        targetProgramId,
-        targetCohortId,
-        targetPeriodId,
-        targetBatchId,
-        targetBatchName,
-        selectedStudentIds,
-        excludedStudentIds = [],
-      } = bp;
-
-      if (!sourceBatchId || !targetPeriodId) continue;
-
-      const sourceFilter = {
-        teachingGroupId: sourceBatchId,
-        academicSessionId: currentSession._id,
-        status: 'Active',
-      };
-
-      if (Array.isArray(selectedStudentIds) && selectedStudentIds.length > 0) {
-        sourceFilter.studentId = { $in: selectedStudentIds, $nin: excludedStudentIds };
-      } else if (Array.isArray(excludedStudentIds) && excludedStudentIds.length > 0) {
-        sourceFilter.studentId = { $nin: excludedStudentIds };
-      }
-
-      const sourceEnrollments = await StudentEnrollment.find(sourceFilter);
-      if (sourceEnrollments.length === 0) continue;
-
-      const programToUse = targetProgramId || sourceEnrollments[0].programId;
-      const cohortToUse = targetCohortId || sourceEnrollments[0].cohortId;
-
-      // Resolve or create target teaching group in the new session
-      let finalTargetBatchId = targetBatchId;
-      if (!finalTargetBatchId || finalTargetBatchId === 'NEW') {
-        const batchName = targetBatchName || 'Batch A';
-        let targetGroup = await TeachingGroup.findOne({
-          academicSessionId: newSession._id,
-          programId: programToUse,
-          academicPeriodId: targetPeriodId,
-          name: batchName,
-        });
-        if (!targetGroup) {
-          targetGroup = await TeachingGroup.create({
-            institutionId: currentSession.institutionId,
-            programId: programToUse,
-            cohortId: cohortToUse,
-            academicSessionId: newSession._id,
-            academicPeriodId: targetPeriodId,
-            name: batchName,
-          });
-        }
-        finalTargetBatchId = targetGroup._id;
-      }
-
-      for (const oldEnr of sourceEnrollments) {
-        oldEnr.status = 'Promoted';
-        oldEnr.promotedAt = new Date();
-        await oldEnr.save();
-
-        const newEnr = await StudentEnrollment.create({
-          studentId: oldEnr.studentId,
-          institutionId: currentSession.institutionId,
-          programId: programToUse,
-          cohortId: cohortToUse,
-          academicSessionId: newSession._id,
-          academicPeriodId: targetPeriodId,
-          teachingGroupId: finalTargetBatchId,
-          status: 'Active',
-          educationGap: 'None (Continuous Enrollment)',
-        });
-
-        promotionResults.push({
-          studentId: oldEnr.studentId,
-          oldSession: currentSession.name,
-          newSession: newSession.name,
-          newEnrollmentId: newEnr._id,
-          batchPromotion: true,
-        });
-      }
-    }
-  }
-
-  // 3b. Process Individual Student Promotions (if any)
-  if (Array.isArray(promotions) && promotions.length > 0) {
-    for (const promo of promotions) {
-      const { studentId, programId, cohortId, newPeriodId, newTeachingGroupId, newPracticalGroupId, newCourseOfferingIds } = promo;
-
-      // Mark the old enrollment as Promoted (NEVER modify its past course records or submissions!)
-      await StudentEnrollment.updateMany(
-        { studentId, academicSessionId: currentSession._id, status: 'Active' },
-        { status: 'Promoted', promotedAt: new Date() }
-      );
-
-      // Create a BRAND NEW StudentEnrollment for the new session
-      const newEnrollment = await StudentEnrollment.create({
-        studentId,
-        institutionId: currentSession.institutionId,
-        programId,
-        cohortId,
-        academicSessionId: newSession._id,
-        academicPeriodId: newPeriodId,
-        teachingGroupId: newTeachingGroupId,
-        status: 'Active',
-        educationGap: 'None (Continuous Enrollment)',
-      });
-
-      // Enroll into new session course offerings
-      if (Array.isArray(newCourseOfferingIds) && newCourseOfferingIds.length > 0) {
-        for (const offId of newCourseOfferingIds) {
-          await CourseMembership.create({
-            studentEnrollmentId: newEnrollment._id,
-            studentId,
-            courseOfferingId: offId,
-            teachingGroupId: newTeachingGroupId,
-            practicalGroupId: newPracticalGroupId || null,
-            status: 'Enrolled',
-          });
-        }
-      }
-
-      promotionResults.push({
-        studentId,
-        oldSession: currentSession.name,
-        newSession: newSession.name,
-        newEnrollmentId: newEnrollment._id,
-      });
-    }
-  }
-
-  await logAudit({
-    actor: req.user,
-    action: 'SESSION_ROLLOVER',
-    entity: 'AcademicSession',
-    entityId: newSession._id,
-    metadata: {
-      fromSession: currentSession.name,
-      toSession: newSession.name,
-      promotedCount: promotionResults.length,
-    }
-  });
-
-  res.status(200).json(successResponse({
-    completedSession: currentSession,
-    newActiveSession: newSession,
-    promotions: promotionResults,
-  }, 'Session rollover and student promotions completed successfully'));
+const rolloverSession = asyncHandler(async (req,res) => {
+  const result = await require('../services/promotion').rolloverSession(req.body, req.user);
+  res.json(successResponse(result, 'Session rollover completed'));
 });
 
 // ─── SEMESTER CURRICULUM MANAGEMENT ───
@@ -1076,23 +757,14 @@ const saveFacultyAllocations = asyncHandler(async (req, res, next) => {
       await offering.save();
     }
 
-    // 2. Ensure Classroom exists
+    // Faculty allocation does not create a classroom. Create Class owns that step.
     let classroom = await Classroom.findOne({
       courseOfferingId: offering._id,
       type,
       practicalGroupId: practicalGroupId || null,
     });
 
-    if (!classroom) {
-      classroom = await Classroom.create({
-        courseOfferingId: offering._id,
-        courseId: courseId,
-        professorId: facultyId,
-        session: session.name,
-        type,
-        practicalGroupId: practicalGroupId || null,
-      });
-    } else {
+    if (classroom) {
       if (classroom.professorId.toString() !== facultyId.toString()) {
         classroom.professorId = facultyId;
         await classroom.save();
@@ -1115,11 +787,11 @@ const saveFacultyAllocations = asyncHandler(async (req, res, next) => {
       allocationDoc = await FacultyAllocation.create({
         ...filter,
         facultyId,
-        classroomId: classroom._id,
+        classroomId: classroom?._id || null,
       });
     } else {
       allocationDoc.facultyId = facultyId;
-      allocationDoc.classroomId = classroom._id;
+      allocationDoc.classroomId = classroom?._id || null;
       await allocationDoc.save();
     }
 

@@ -67,7 +67,7 @@ export default function SessionRollover() {
     fetchInitialData();
   }, [activeSession]);
 
-  const fetchInitialData = async () => {
+  async function fetchInitialData() {
     try {
       setLoading(true);
       const [sessRes, progRes, batchRes] = await Promise.all([
@@ -96,7 +96,7 @@ export default function SessionRollover() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   // Selected source batch object
   const selectedBatch = useMemo(() => {
@@ -243,7 +243,9 @@ export default function SessionRollover() {
 
     try {
       setSubmitting(true);
+      if (!window.confirm('Promote the selected students to the next semester? Historical records will be retained.')) return;
       const res = await academicAPI.promoteBatch({
+        confirmed: true,
         sourceBatchId,
         targetSessionId,
         targetProgramId: selectedBatch?.programId?._id || selectedBatch?.programId,
@@ -311,7 +313,9 @@ export default function SessionRollover() {
 
     try {
       setSubmitting(true);
+      if (!window.confirm('Close this academic session and open the new one?')) return;
       const res = await academicAPI.rolloverSession({
+        confirmed: true,
         currentSessionId: rolloverForm.currentSessionId,
         newSessionName: rolloverForm.newSessionName,
         newStartDate: rolloverForm.newStartDate || new Date().toISOString(),
@@ -363,7 +367,7 @@ export default function SessionRollover() {
           </h1>
         </div>
         <p style={{ color: 'var(--color-fog)', fontSize: '14px', maxWidth: '700px' }}>
-          Promote a batch to their next semester (e.g. <em>BCA Batch B Sem 3 → Sem 4</em>). Students will be automatically enrolled into the target semester's curriculum subjects.
+          Promote a batch to their next semester (e.g. <em>BCA Batch B Sem 3 → Sem 4</em>). Students will be automatically enrolled into the target semester&apos;s curriculum subjects.
         </p>
       </div>
 

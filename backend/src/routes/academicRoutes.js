@@ -41,26 +41,26 @@ router.route('/cohorts')
 // Teaching Groups (Batches)
 router.route('/batches')
   .get(academicController.getTeachingGroups)
-  .post(authorize('admin', 'professor'), academicController.createTeachingGroup);
+  .post(authorize('admin'), academicController.createTeachingGroup);
 
 router.route('/batches/:batchId/students')
-  .get(academicController.getBatchStudents);
+  .get(authorize('professor'), academicController.getBatchStudents);
 
 router.route('/promote-batch')
   .post(authorize('admin'), academicController.promoteBatch);
 
 // Practical Groups
 router.route('/practical-groups')
-  .post(authorize('admin', 'professor'), academicController.createPracticalGroup);
+  .post(authorize('admin'), academicController.createPracticalGroup);
 
 // Course Offerings
 router.route('/offerings')
   .get(academicController.getCourseOfferings)
-  .post(authorize('admin', 'professor'), academicController.createCourseOffering);
+  .post(authorize('admin'), academicController.createCourseOffering);
 
 // Student Enrollment
 router.route('/enroll')
-  .post(authorize('admin', 'professor'), academicController.enrollStudent);
+  .post(authorize('admin'), academicController.enrollStudent);
 
 // Session Rollover & Promotion
 router.route('/rollover')

@@ -17,25 +17,39 @@ export default function MaterialBuilder() {
     classroomId: '',
     description: '',
   });
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
+  const [progress, setProgress] = useState('');
+  const selectFiles = (event) => {
+    const selected = Array.from(event.target.files || []);
+    event.target.value = '';
+    setError('');
+    if (selected.some(file => file.size > 10 * 1024 * 1024)) return setError('Each file must be 10 MB or smaller.');
+    if (formData.type === 'image' && files.length + selected.length > 20) return setError('Select up to 20 images per resource.');
+    if (formData.type === 'image' && selected.some(file => !/\.(png|jpe?g|webp)$/i.test(file.name))) return setError('Select PNG, JPG or WebP images.');
+    setFiles(previous => {
+      if (formData.type !== 'image') return selected.slice(0, 1);
+      return [...previous, ...selected.filter(file => !previous.some(existing => existing.name === file.name && existing.size === file.size && existing.lastModified === file.lastModified))];
+    });
+  };
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  function fetchClassrooms() {
+ return classroomsAPI.list().then((res) => {
+if (res.success) {
+        setClassrooms(res.data);
+      }
+}).catch((err) => {
+      console.error('Failed to load classrooms', err);
+    });
+ }
 
   useEffect(() => {
     fetchClassrooms();
   }, []);
 
-  const fetchClassrooms = async () => {
-    try {
-      const res = await classroomsAPI.list();
-      if (res.success) {
-        setClassrooms(res.data);
-      }
-    } catch (err) {
-      console.error('Failed to load classrooms', err);
-    }
-  };
+
 
   const classroomOptions = classrooms.map(c => ({
     value: c._id,
@@ -44,10 +58,10 @@ export default function MaterialBuilder() {
 
   const typeOptions = [
     { value: 'pdf', label: 'PDF Document' },
-    { value: 'presentation', label: 'Presentation (PPT)' },
-    { value: 'text', label: 'Word Document' },
+    { value: 'presentation', label: 'Presentation (PPTX)' },
+    { value: 'text', label: 'Word Document (DOCX)' },
     { value: 'image', label: 'Image' },
-    { value: 'video', label: 'Video File' }
+
   ];
 
   const handleSubmit = async (e) => {
@@ -57,25 +71,28 @@ export default function MaterialBuilder() {
     if (!formData.classroomId) return setError('Please select a classroom batch');
     if (!formData.title) return setError('Please enter a title');
     if (!formData.topic) return setError('Please enter a topic');
-    if (!file) return setError('Please select a file to upload');
+    if (!files.length) return setError('Please select a file to upload');
 
     setLoading(true);
 
     try {
+      setProgress(`Uploading ${files.length} file(s) as one resource...`);
       const data = new FormData();
       data.append('title', formData.title);
       data.append('topic', formData.topic);
       data.append('type', formData.type);
       data.append('classroomId', formData.classroomId);
       data.append('description', formData.description);
-      data.append('file', file);
+      files.forEach(file => data.append('file', file));
 
       await materialsAPI.create(formData.classroomId, data);
+      setFiles([]);
       router.push('/admin/materials');
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Upload failed. Please check your connection.');
+      setError(err.message || 'Upload failed. Please retry.');
     } finally {
       setLoading(false);
+      setProgress('');
     }
   };
 
@@ -100,6 +117,7 @@ export default function MaterialBuilder() {
         )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <fieldset disabled={loading} style={{ display: 'contents' }}>
           
           <div>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: 700, color: 'var(--color-ink)', fontSize: '14px' }}>Target Classroom (Batch)</label>
@@ -141,7 +159,7 @@ export default function MaterialBuilder() {
             <CustomSelect
               options={typeOptions}
               value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+              onChange={(e) => { setFormData({ ...formData, type: e.target.value }); setFiles([]); setError(''); }}
             />
           </div>
 
@@ -155,18 +173,26 @@ export default function MaterialBuilder() {
             }}>
               <UploadCloud size={32} color="var(--color-ink)" style={{ marginBottom: '12px' }} />
               <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-ink)' }}>
-                {file ? file.name : 'Click or drag file to upload'}
+                {files.length ? `${files.length} file(s) selected — click to add more` : formData.type === 'image' ? 'Click to select one or more images' : 'Click to select a file'}
               </span>
               <span style={{ fontSize: '13px', color: 'var(--color-fog)', marginTop: '4px' }}>
-                Supports PDF, PPT, Word, and Images (Max 10MB)
+                {formData.type === 'image' ? 'Up to 20 images in one resource · PNG, JPG, WebP · 10 MB per image' : 'Supports PDF, PPT, Word, and Images (Max 10MB)'}
               </span>
               <input
                 type="file"
                 style={{ display: 'none' }}
-                onChange={(e) => setFile(e.target.files[0])}
-                accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg,.webp"
+                multiple={formData.type === 'image'}
+                onChange={selectFiles}
+                accept={formData.type === 'image' ? '.png,.jpg,.jpeg,.webp' : '.pdf,.docx,.pptx,.png,.jpg,.jpeg,.webp'}
               />
             </label>
+            <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 8 }}>
+              {files.map((file, index) => <li key={`${file.name}-${file.lastModified}-${index}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12, background: '#f3f0eb', borderRadius: 8 }}>
+                <span style={{ overflowWrap: 'anywhere', minWidth: 0 }}>{file.name} <small>({(file.size / 1024 / 1024).toFixed(2)} MB)</small></span>
+                <button type="button" aria-label={`Remove ${file.name}`} onClick={() => setFiles(previous => previous.filter(item => item !== file))}>Remove</button>
+              </li>)}
+            </ul>
+            {progress && <p role="status" aria-live="polite">{progress}</p>}
           </div>
 
           <button
@@ -178,6 +204,7 @@ export default function MaterialBuilder() {
             {loading ? <div className="admin-spinner" style={{ width: '20px', height: '20px', borderTopColor: 'var(--color-sun-yellow)' }} /> : <Save size={18} />}
             {loading ? 'Uploading & Saving...' : 'Publish Material'}
           </button>
+          </fieldset>
         </form>
       </div>
     </div>

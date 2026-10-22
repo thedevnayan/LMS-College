@@ -6,40 +6,13 @@ const User = require('../models/User');
 /**
  * Protect routes - verifies JWT and attaches user to req
  */
+const userLimiter = require('express-rate-limit').rateLimit({
+  windowMs: 60_000, limit: 300, keyGenerator: req => String(req.user._id), standardHeaders: 'draft-8', legacyHeaders: false,
+});
 const protect = asyncHandler(async (req, res, next) => {
-  let token;
-
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    token = req.headers.authorization.split(' ')[1];
-  }
-
-  if (!token) {
-    return next(new ApiError(401, 'UNAUTHORIZED', 'Not authorized, no token provided'));
-  }
-
-  try {
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-
-    // Get user from token
-    const user = await User.findById(decoded.id);
-
-    if (!user) {
-      return next(new ApiError(401, 'UNAUTHORIZED', 'Not authorized, user not found'));
-    }
-
-    if (!user.isActive) {
-      return next(new ApiError(401, 'UNAUTHORIZED', 'Not authorized, account is deactivated'));
-    }
-
-    req.user = user;
-    next();
-  } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      return next(new ApiError(401, 'UNAUTHORIZED', 'Token expired'));
-    }
-    return next(new ApiError(401, 'UNAUTHORIZED', 'Not authorized, token failed'));
-  }
+  const token = /^Bearer ([^ ]+)$/.exec(req.headers.authorization || '')?.[1];
+  req.user = await require('../services/tokens').authenticate(token);
+  userLimiter(req, res, next);
 });
 
 /**

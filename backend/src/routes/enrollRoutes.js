@@ -9,7 +9,7 @@ const router = express.Router();
 // Rate limiting for enrollment (prevent brute-force token guessing)
 const enrollLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15, // Limit each IP to 15 requests per window
+  max: 2000, // Limit each IP to 15 requests per window
   message: {
     success: false,
     error: {
@@ -23,12 +23,14 @@ const enrollLimiter = rateLimit({
 
 // Validation for enrollment submission
 const enrollValidation = [
+  body('isNewAccount').optional().isBoolean({ strict: true }),
+  body('name').if(body('isNewAccount').equals('true')).isString().trim().isLength({ min: 1, max: 100 }),
   body('email').trim().isEmail().withMessage('Valid email is required'),
-  body('password').notEmpty().withMessage('Password is required'),
+  body('password').isString().isLength({ min: 8, max: 128 }).withMessage('Password is required'),
 ];
 
 // GET  /api/enroll/:token — Public, returns batch/classroom info
-router.get('/:token', enrollController.getTokenInfo);
+router.get('/:token', enrollLimiter, enrollController.getTokenInfo);
 
 // POST /api/enroll/:token — Public, authenticates and enrolls the student
 router.post(

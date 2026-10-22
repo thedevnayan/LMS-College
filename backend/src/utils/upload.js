@@ -1,58 +1,22 @@
 const multer = require('multer');
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
-const cloudinary = require('cloudinary').v2;
+const os = require('node:os');
+const fs = require('node:fs/promises');
+const { randomUUID } = require('node:crypto');
+const { classroomAccess } = require('../services/access');
+const Material = require('../models/Material');
 const { ApiError } = require('../middleware/errorHandler');
-
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// Configure Storage
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => {
-    const ext = file.originalname.split('.').pop();
-    const isImage = file.mimetype.startsWith('image/');
-    const baseName = file.originalname.substring(0, file.originalname.lastIndexOf('.')) || file.originalname;
-    
-    return {
-      folder: 'lms_materials',
-      resource_type: 'auto', // Automatically detects image, raw (pdf, docx, pptx) or video
-      format: undefined, // Let cloudinary keep original format
-      public_id: isImage ? `${Date.now()}-${baseName}` : `${Date.now()}-${baseName}.${ext}`
-    };
-  },
-});
-
-const fileFilter = (req, file, cb) => {
-  // Allow common material formats
-  const allowedMimes = [
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'image/jpeg',
-    'image/png',
-    'image/webp'
-  ];
-  
-  if (allowedMimes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new ApiError(400, 'UPLOAD_ERROR', 'Invalid file type. Only PDF, PPT, Word, and Images are allowed.'));
-  }
+const parser = multer({ storage: multer.diskStorage({ destination: os.tmpdir(), filename: (req,file,cb) => cb(null, 'skillbery-' + randomUUID()) }), limits: { fileSize: 10 * 1024 * 1024, files: 20, fields: 20, fieldSize: 100 * 1024 } });
+const handler = (field, multiple) => async (req,res,next) => {
+  try {
+    const material = req.params.id ? await Material.findById(req.params.id) : null;
+    if (req.params.id && !material) throw new ApiError(404,'NOT_FOUND','Material not found');
+    await classroomAccess(material?.classroomId || req.params.classroomId, req.user, true);
+    (multiple ? parser.array(field, 20) : parser.single(field))(req,res,err => {
+      const cleanup = () => { for (const file of req.files || (req.file ? [req.file] : [])) if (file.path) fs.unlink(file.path).catch(() => {}); };
+      res.once('finish',cleanup); res.once('close',cleanup);
+      next(err);
+    });
+  } catch (err) { next(err); }
 };
-
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-  },
-  fileFilter: fileFilter,
-});
-
-module.exports = { upload, cloudinary };
+const upload = { single: field => handler(field, false), array: field => handler(field, true) };
+module.exports = { upload, cloudinary: require('../services/fileStorage').cloudinary };

@@ -58,3 +58,16 @@ Thumbs.db
 tmp/
 temp/
 .turbo/
+
+# Local verification caches and transient diagnostics
+.npm-cache/
+.test-binaries/
+backend/audit-*.json
+frontend/audit-*.json
+frontend/lint-current.json
+backend/test-results.txt
+backend/load-*.txt
+backend/e2e/results.txt
+frontend/lint-final.txt
+frontend/build-final.txt
+frontend/.next-e2e/

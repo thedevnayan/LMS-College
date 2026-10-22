@@ -26,8 +26,6 @@ const batchSchema = new mongoose.Schema(
   }
 );
 
-// TTL Index for soft deletes
-batchSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
 // Prevent duplicate batch names within the same course, ignoring soft-deleted ones
 batchSchema.index(

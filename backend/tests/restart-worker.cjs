@@ -1,0 +1,3 @@
+// Only invoked with the ephemeral replica-set URI by integration tests.
+const mongoose=require('mongoose');const http=require('node:http');require('../src/models');
+(async()=>{await mongoose.connect(process.env.TEST_DATABASE_URI,{autoIndex:false,dbName:process.env.TEST_DATABASE_NAME});const server=http.createServer(require('../src/app'));const io=require('../src/sockets/testSocket').initSocket(server);await new Promise(r=>server.listen(0,'127.0.0.1',r));process.send({port:server.address().port});process.on('message',async m=>{if(m==='stop'){await new Promise(r=>io.close(r));await mongoose.disconnect();process.exit(0);}});})().catch(()=>process.exit(1));

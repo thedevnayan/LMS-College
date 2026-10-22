@@ -78,4 +78,5 @@ studentEnrollmentSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
 });
 
+studentEnrollmentSchema.index({ teachingGroupId: 1, status: 1, deletedAt: 1 });
 module.exports = mongoose.model('StudentEnrollment', studentEnrollmentSchema);

@@ -13,9 +13,8 @@ export function AuthProvider({ children }) {
   // Check if user is already logged in on mount
   useEffect(() => {
     const token = getToken();
-    if (token) {
-      authAPI
-        .me()
+    const session = token ? authAPI.me() : Promise.resolve({ success: false });
+    session
         .then((res) => {
           if (res.success) {
             setUser(res.data);
@@ -25,9 +24,6 @@ export function AuthProvider({ children }) {
           removeToken();
         })
         .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
   }, []);
 
   const login = useCallback(async (email, password) => {
@@ -47,6 +43,12 @@ export function AuthProvider({ children }) {
     }
     removeToken();
     setUser(null);
+  }, []);
+
+  useEffect(() => {
+    const revoked = () => { removeToken(); setUser(null); };
+    window.addEventListener('skillbery-access-error', revoked);
+    return () => window.removeEventListener('skillbery-access-error', revoked);
   }, []);
 
   const value = {

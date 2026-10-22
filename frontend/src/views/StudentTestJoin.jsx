@@ -6,7 +6,7 @@ import { testsAPI } from '@/services/api';
 import { ArrowLeft, CheckSquare, Clock, AlertTriangle, PlayCircle } from 'lucide-react';
 
 export default function StudentTestJoin() {
-  const { classroomId, testId } = useParams();
+  const { id: classroomId, testId } = useParams();
   const router = useRouter();
 
   const [test, setTest] = useState(null);
@@ -17,6 +17,11 @@ export default function StudentTestJoin() {
   useEffect(() => {
     const fetchTest = async () => {
       try {
+        const attempt = await testsAPI.getMyAttempt(testId);
+        if (attempt.data?.attempt?.status === 'completed') {
+          router.replace(`/tests/${testId}/report`);
+          return;
+        }
         const res = await testsAPI.getById(testId);
         if (res.success) {
           setTest(res.data);
@@ -28,7 +33,7 @@ export default function StudentTestJoin() {
       }
     };
     fetchTest();
-  }, [testId]);
+  }, [testId, router]);
 
   const [showCodePrompt, setShowCodePrompt] = useState(false);
   const [joinCode, setJoinCode] = useState('');
@@ -162,7 +167,7 @@ export default function StudentTestJoin() {
           }}>
             <h2 style={{ fontSize: '24px', color: 'var(--color-ink)', marginBottom: '8px' }}>Enter Join Code</h2>
             <p style={{ color: 'var(--color-fog)', fontSize: '15px', marginBottom: '32px' }}>
-              Your professor will provide a 6-digit code to start this live test.
+              Your professor will provide a 12-character code to start this live test.
             </p>
 
             {joinError && (
@@ -175,10 +180,10 @@ export default function StudentTestJoin() {
               <input 
                 type="text" 
                 className="admin-input" 
-                placeholder="6-DIGIT CODE"
+                placeholder="12-CHARACTER CODE"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                maxLength={6}
+                maxLength={12}
                 style={{ textAlign: 'center', fontSize: '24px', letterSpacing: '8px', textTransform: 'uppercase', padding: '16px' }}
                 required
               />
@@ -192,9 +197,9 @@ export default function StudentTestJoin() {
                 </button>
                 <button 
                   onClick={handleVerifyCode}
-                  disabled={starting || joinCode.length < 6}
+                  disabled={starting || joinCode.length < 12}
                   className="admin-btn-primary"
-                  style={{ flex: 1, padding: '16px', fontSize: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', opacity: (starting || joinCode.length < 6) ? 0.7 : 1, cursor: (starting || joinCode.length < 6) ? 'not-allowed' : 'pointer' }}
+                  style={{ flex: 1, padding: '16px', fontSize: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', opacity: (starting || joinCode.length < 12) ? 0.7 : 1, cursor: (starting || joinCode.length < 12) ? 'not-allowed' : 'pointer' }}
                 >
                   {starting ? 'Joining...' : 'Join Now'}
                 </button>

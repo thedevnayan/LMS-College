@@ -1,26 +1,33 @@
-require('dotenv').config();
-const app = require('./app');
-const connectDB = require('./config/db');
-
-const http = require('http');
-const { initSocket } = require('./sockets/testSocket');
-
-const PORT = process.env.PORT || 5000;
-
-// Connect to MongoDB
-connectDB();
-
-const server = http.createServer(app);
-initSocket(server);
-
-// Start the server
-server.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-});
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err, promise) => {
-  console.error(`Error: ${err.message}`);
-  // Close server & exit process
-  server.close(() => process.exit(1));
+require('dotenv').config({ quiet: true });
+const { validateEnvironment } = require('./config/security');
+const mongoose = require('mongoose');
+const http = require('node:http');
+let startupStage = 'configuration';
+async function main() {
+  validateEnvironment();
+  startupStage = 'database connection';
+  await require('./config/db')();
+  startupStage = 'application initialization';
+  const server = http.createServer(require('./app'));
+  const io = require('./sockets/testSocket').initSocket(server);
+  startupStage = 'HTTP listener';
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(process.env.PORT || 5000, () => { server.removeListener('error', reject); resolve(); });
+  });
+  console.log('SkillBery API ready');
+  let stopping = false;
+  const shutdown = async () => {
+    if (stopping) return; stopping = true;
+    const timeout = setTimeout(() => process.exit(1), 10000).unref();
+    io.close(); server.close();
+    await mongoose.disconnect(); clearTimeout(timeout);
+  };
+  process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
+  process.on('unhandledRejection', () => { console.error('Unhandled rejection; shutting down'); shutdown(); });
+}
+main().catch(async error => {
+  console.error(require('./config/startupError')(startupStage, error));
+  await mongoose.disconnect();
+  process.exitCode = 1;
 });

@@ -10,7 +10,9 @@ const router = express.Router();
 // Rate limiting for auth routes
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 requests per `window`
+  max: 10,
+  skipSuccessfulRequests: true,
+  keyGenerator: req => require('express-rate-limit').ipKeyGenerator(req.ip) + ':' + String(req.body?.email || '').trim().toLowerCase(), // Limit each IP to 10 requests per `window`
   message: {
     success: false,
     error: {
@@ -25,13 +27,13 @@ const authLimiter = rateLimit({
 // Validation rules
 const registerValidation = [
   body('name').trim().notEmpty().withMessage('Name is required'),
-  body('email').trim().isEmail().withMessage('Valid email is required'),
+  body('email').trim().toLowerCase().isEmail().withMessage('Valid email is required'),
   body('password')
     .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
     .matches(/[a-zA-Z]/).withMessage('Password must contain at least one letter')
     .matches(/[0-9]/).withMessage('Password must contain at least one number'),
   body('role')
-    .isIn(['professor', 'student']).withMessage('Role must be professor or student'),
+    .optional().equals('student').withMessage('Public registration is for students only'),
 ];
 
 const loginValidation = [

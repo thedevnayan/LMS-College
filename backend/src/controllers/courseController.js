@@ -152,26 +152,7 @@ const publishCourse = asyncHandler(async (req, res, next) => {
  * @route   POST /api/courses/:id/enroll
  * @access  Student only
  */
-const enrollCourse = asyncHandler(async (req, res, next) => {
-  const course = await Course.findById(req.params.id);
-
-  if (!course || !course.published) {
-    return next(new ApiError(404, 'NOT_FOUND', 'Course not found or unpublished'));
-  }
-
-  try {
-    const enrollment = await Enrollment.create({
-      studentId: req.user._id,
-      courseId: course._id,
-    });
-    res.status(201).json(successResponse(enrollment));
-  } catch (err) {
-    if (err.code === 11000) {
-      return next(new ApiError(409, 'ALREADY_ENROLLED', 'Student is already enrolled in this course'));
-    }
-    next(err);
-  }
-});
+const enrollCourse = asyncHandler(async () => { throw new ApiError(410, 'INVITATION_REQUIRED', 'Use your batch enrollment invitation'); });
 
 /**
  * @route   GET /api/courses/:id/students

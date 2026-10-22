@@ -10,6 +10,7 @@ const answerSchema = new mongoose.Schema({
   longAnswerText: { type: String, default: '' },
   codingSourceCode: { type: String, default: '' },
   
+  receivedAt: { type: Date },
   // Grading
   isCorrect: { type: Boolean, default: false },
   pointsAwarded: { type: Number, default: 0 }
@@ -53,6 +54,7 @@ const testAttemptSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    deadlineAt: { type: Date, default: null },
     completedAt: {
       type: Date,
     }
@@ -74,4 +76,6 @@ testAttemptSchema.index(
   { unique: true, partialFilterExpression: { guestId: { $type: 'string' } } }
 );
 
+testAttemptSchema.index({ status: 1, deadlineAt: 1 });
+testAttemptSchema.index({ testId: 1, score: -1, completedAt: 1 });
 module.exports = mongoose.model('TestAttempt', testAttemptSchema);

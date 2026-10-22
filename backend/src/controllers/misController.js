@@ -1,3 +1,4 @@
+const { maximumScore } = require('../services/assessmentStats');
 const mongoose = require('mongoose');
 const Institution = require('../models/Institution');
 const Department = require('../models/Department');
@@ -106,8 +107,8 @@ const getOverview = asyncHandler(async (req, res) => {
 
   gradedSubmissions.forEach(sub => {
     const a = assignments.find(x => x._id.toString() === sub.assignmentId.toString());
-    const max = (a && a.maxMarks) ? a.maxMarks : 100;
-    const pct = Math.min(100, Math.round(((sub.marks || 0) / max) * 100));
+    const max = a?.maxMarks ?? 0;
+    const pct = max > 0 ? Math.min(100, Math.round(((sub.marks || 0) / max) * 100)) : 0;
     totalScorePct += pct;
     scoreCount++;
     if (pct >= 80) gradeBuckets.A++;
@@ -119,12 +120,8 @@ const getOverview = asyncHandler(async (req, res) => {
 
   testAttempts.forEach(ta => {
     const t = tests.find(x => x._id.toString() === ta.testId.toString());
-    let max = 0;
-    if (t && t.questions && t.questions.length > 0) {
-      max = t.questions.reduce((acc, q) => acc + (q.points || 1), 0);
-    }
-    if (max <= 0) max = 100;
-    const pct = Math.min(100, Math.round(((ta.score || 0) / max) * 100));
+    const max = maximumScore(t);
+    const pct = max > 0 ? Math.min(100, Math.round(((ta.score || 0) / max) * 100)) : 0;
     totalScorePct += pct;
     scoreCount++;
     if (pct >= 80) gradeBuckets.A++;
@@ -334,14 +331,14 @@ const getBatchAnalytics = asyncHandler(async (req, res, next) => {
 
     mySubs.forEach(s => {
       const a = assignments.find(x => x._id.toString() === s.assignmentId.toString());
-      const max = a?.maxMarks || 100;
+      const max = a?.maxMarks ?? 0;
       myTotalScore += (s.marks || 0);
       myTotalPossible += max;
     });
 
     myAttempts.forEach(ta => {
       myTotalScore += (ta.score || 0);
-      myTotalPossible += 100;
+      myTotalPossible += maximumScore(tests.find(t => String(t._id) === String(ta.testId)));
     });
 
     const completionRate = (assignments.length + tests.length) > 0
@@ -380,7 +377,7 @@ const getStudentHistoryAndTimeline = asyncHandler(async (req, res, next) => {
   const { studentId } = req.params;
 
   // Authorization check: Student can only view self; Prof/Admin can view any student
-  if (req.user.role === 'student' && req.user._id.toString() !== studentId) {
+  if (req.user.role !== 'admin' && req.user._id.toString() !== studentId) {
     return next(new ApiError(403, 'FORBIDDEN', 'You cannot view other students academic history'));
   }
 
@@ -499,7 +496,7 @@ const getStudentHistoryAndTimeline = asyncHandler(async (req, res, next) => {
       const attempts = await TestAttempt.find({
         studentId: student._id,
         testId: { $in: testIds }
-      }).populate('testId', 'title testType');
+      }).populate('testId', 'title testType questions fastestBonusPoints');
 
       // Calculate session performance
       let scoreObtained = 0;
@@ -508,14 +505,14 @@ const getStudentHistoryAndTimeline = asyncHandler(async (req, res, next) => {
       submissions.forEach(s => {
         if (s.status === 'graded') {
           scoreObtained += (s.marks || 0);
-          maxMarks += (s.assignmentId?.maxMarks || 100);
+          maxMarks += (s.assignmentId?.maxMarks ?? 0);
         }
       });
 
       attempts.forEach(ta => {
         if (ta.status === 'completed') {
           scoreObtained += (ta.score || 0);
-          maxMarks += 100;
+          maxMarks += maximumScore(ta.testId);
         }
       });
 
@@ -580,7 +577,7 @@ const getStudentHistoryAndTimeline = asyncHandler(async (req, res, next) => {
       timelineEvents.push({
         type: 'SUBMISSION',
         title: `Submitted: ${sub.assignmentId?.title || 'Assignment'}`,
-        subtitle: `Score: ${sub.marks !== null ? `${sub.marks}/${sub.assignmentId?.maxMarks || 100}` : 'Pending grading'}`,
+        subtitle: `Score: ${sub.marks !== null ? `${sub.marks}/${sub.assignmentId?.maxMarks ?? 0}` : 'Pending grading'}`,
         timestamp: sub.submittedAt || sub.createdAt,
         sessionName: h.session?.name,
         badge: 'Assignment',

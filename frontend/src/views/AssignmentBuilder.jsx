@@ -33,36 +33,17 @@ export default function AssignmentBuilder() {
   const [aiCount, setAiCount] = useState(5);
   const [aiDifficulty, setAiDifficulty] = useState('medium');
 
-  useEffect(() => {
-    fetchClassrooms();
-    if (isEditing) {
-      fetchAssignment();
-    }
-  }, [id]);
-
-  // Auto-calculate Total Marks based on questions
-  useEffect(() => {
-    if (formData.questions.length > 0) {
-      const calculatedTotal = formData.questions.reduce((sum, q) => sum + (Number(q.marks) || 0), 0);
-      if (calculatedTotal !== formData.maxMarks) {
-        setFormData(prev => ({ ...prev, maxMarks: calculatedTotal }));
-      }
-    }
-  }, [formData.questions]);
-
-  const fetchClassrooms = async () => {
-    try {
-      const res = await classroomsAPI.list();
-      if (res.success) setClassrooms(res.data);
-    } catch (err) {
+  function fetchClassrooms() {
+ return classroomsAPI.list().then((res) => {
+if (res.success) setClassrooms(res.data);
+}).catch((err) => {
       console.error(err);
-    }
-  };
+    });
+ }
 
-  const fetchAssignment = async () => {
-    try {
-      const res = await assignmentsAPI.getById(id);
-      if (res.success) {
+  function fetchAssignment() {
+ return assignmentsAPI.getById(id).then((res) => {
+if (res.success) {
         const assignment = res.data;
         setFormData({
           title: assignment.title,
@@ -70,16 +51,29 @@ export default function AssignmentBuilder() {
           startDate: new Date(assignment.startDate).toISOString().split('T')[0],
           dueDate: new Date(assignment.dueDate).toISOString().split('T')[0],
           maxMarks: assignment.maxMarks,
-          classroomId: assignment.classroomId,
+          classroomId: assignment.classroomId?._id || assignment.classroomId,
           questions: assignment.questions || [],
         });
       }
-    } catch (err) {
+}).catch((err) => {
       console.error(err);
-    } finally {
+    }).finally(() => {
       setLoading(false);
+    });
+ }
+
+  useEffect(() => {
+    fetchClassrooms();
+    if (isEditing) {
+      fetchAssignment();
     }
-  };
+  }, [id]);
+
+  const totalMarks = formData.questions.length ? formData.questions.reduce((sum, q) => sum + (Number(q.marks) || 0), 0) : formData.maxMarks;
+
+
+
+
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -155,9 +149,9 @@ export default function AssignmentBuilder() {
     setSaving(true);
     try {
       if (isEditing) {
-        await assignmentsAPI.update(id, formData);
+        await assignmentsAPI.update(id, { ...formData, maxMarks: totalMarks });
       } else {
-        await assignmentsAPI.create(formData.classroomId, formData);
+        await assignmentsAPI.create(formData.classroomId, { ...formData, maxMarks: totalMarks });
       }
       router.push('/admin/assignments');
     } catch (err) {
@@ -533,7 +527,7 @@ export default function AssignmentBuilder() {
                 type="number"
                 className="admin-input"
                 name="maxMarks"
-                value={formData.maxMarks}
+                value={totalMarks}
                 onChange={handleChange}
                 min="1"
                 readOnly={formData.questions.length > 0}

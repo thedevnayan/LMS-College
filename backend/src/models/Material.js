@@ -47,9 +47,11 @@ const materialSchema = new mongoose.Schema(
       enum: ['pdf', 'video', 'text', 'link', 'presentation', 'image'],
       required: [true, 'Material type is required'],
     },
+    storage: { publicId: String, format: String, mime: String, bytes: Number, originalName: String },
+    images: [{ publicId: String, format: String, mime: String, bytes: Number, originalName: String }],
     url: {
       type: String,
-      required: [true, 'File URL is required'],
+      default: '',
     },
     content: {
       type: String,
@@ -73,7 +75,6 @@ const materialSchema = new mongoose.Schema(
   }
 );
 
-materialSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
 materialSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });
@@ -87,5 +88,6 @@ materialSchema.pre('save', async function () {
   }
 });
 
+materialSchema.index({ classroomId: 1, createdAt: -1 });
 const Material = mongoose.model('Material', materialSchema);
 module.exports = Material;

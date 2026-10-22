@@ -30,10 +30,10 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchClassrooms();
-    fetchBatchCodes();
+    if (user?.role === 'admin') fetchBatchCodes();
   }, [activeSession]);
 
-  const fetchClassrooms = async () => {
+  async function fetchClassrooms() {
     setLoading(true);
     try {
       const res = await classroomsAPI.list('limit=100');
@@ -45,9 +45,9 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const fetchBatchCodes = async () => {
+  async function fetchBatchCodes() {
     try {
       const res = await classroomsAPI.getBatchCodes(activeSession?.name);
       if (res.success) {
@@ -56,7 +56,7 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error('Failed to fetch batch codes:', err);
     }
-  };
+  }
 
   const copyEnrollLink = (enrollmentToken) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -72,15 +72,18 @@ export default function AdminDashboard() {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
+  const editInvitation = async batch => {
+    const text = window.prompt('Restrict to approved student emails, separated by commas. Leave empty to let students register and join using this QR. Existing batch students can also enroll.', (batch.allowedEmails || []).join(', '));
+    if (text === null) return;
+    try {
+      await classroomsAPI.updateInvitation(batch.masterCodeId, { allowedEmails: text.split(',').map(e => e.trim()).filter(Boolean), expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), rotate: true });
+      toast.success('Invitation renewed for 7 days. Previous QR link revoked.');
+      await fetchBatchCodes();
+    } catch (error) { toast.error(error.message); }
+  };
   const toggleBatchLogin = async (id, currentState) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/classrooms/batch-codes/${id}/toggle-login`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
-      });
-      const data = await res.json();
+      const data = await classroomsAPI.setBatchAccess(id, !currentState);
       if (data.success) {
         toast.success(data.message);
         fetchBatchCodes(); // Refresh to get updated state
@@ -96,15 +99,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     setCreatingTeacher(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/users`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        },
-        body: JSON.stringify(teacherForm)
-      });
-      const data = await res.json();
+      const data = await classroomsAPI.createTeacher(teacherForm);
       if (data.success) {
         toast.success(`Successfully created credentials for ${teacherForm.name}`);
         setCreateTeacherModal(false);
@@ -130,7 +125,7 @@ export default function AdminDashboard() {
     const q = searchQuery.toLowerCase();
     const courseName = c.courseId?.title || '';
     return (
-      c.classBatch.toLowerCase().includes(q) ||
+      (c.classBatch || '').toLowerCase().includes(q) ||
       c.session.toLowerCase().includes(q) ||
       courseName.toLowerCase().includes(q)
     );
@@ -419,7 +414,7 @@ export default function AdminDashboard() {
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                     <button
                       type="button"
-                      onClick={() => copyCode(b.masterCode)}
+                      onClick={() => editInvitation(b)}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -434,7 +429,7 @@ export default function AdminDashboard() {
                         boxShadow: '1px 1px 0 var(--color-ink)',
                       }}
                     >
-                      <span style={{ fontFamily: 'monospace', letterSpacing: '1px' }}>{b.masterCode}</span>
+                      <span style={{ fontFamily: 'monospace', letterSpacing: '1px' }}>Manage invitation</span>
                       {copiedCode && copiedCode === b.masterCode ? <Check size={14} /> : <Copy size={14} />}
                     </button>
                   </div>

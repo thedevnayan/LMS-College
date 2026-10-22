@@ -11,23 +11,23 @@ export default function AdminStudentsList() {
   const [searchTerm, setSearchTerm] = useState('');
   const router = useRouter();
 
+  function fetchStudents() {
+ return studentsAPI.getAll().then((res) => {
+if (res.success) {
+        setStudents(res.data);
+      }
+}).catch((error) => {
+      console.error('Failed to fetch students:', error);
+    }).finally(() => {
+      setLoading(false);
+    });
+ }
+
   useEffect(() => {
     fetchStudents();
   }, []);
 
-  const fetchStudents = async () => {
-    try {
-      setLoading(true);
-      const res = await studentsAPI.getAll();
-      if (res.success) {
-        setStudents(res.data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch students:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const filteredStudents = students.filter(student => 
     student.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 

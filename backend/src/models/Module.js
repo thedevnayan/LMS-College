@@ -30,8 +30,6 @@ const moduleSchema = new mongoose.Schema(
   }
 );
 
-// TTL Index for soft deletes (7 days)
-moduleSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
 // Pre-find hook to exclude soft-deleted items
 moduleSchema.pre(/^find/, function () {

@@ -67,7 +67,7 @@ export default function StudentDashboard() {
           <h1 style={{ fontSize: '32px', color: 'var(--color-ink)', fontWeight: 800, letterSpacing: '-1px', marginBottom: '8px' }}>
             Welcome back, {user?.name?.split(' ')[0]}!
           </h1>
-          <p style={{ color: 'var(--color-fog)', fontSize: '16px' }}>Ready to conquer today's classes?</p>
+          <p style={{ color: 'var(--color-fog)', fontSize: '16px' }}>Ready to conquer today&apos;s classes?</p>
         </div>
         <div style={{ padding: '16px', backgroundColor: 'var(--color-sun-yellow)', borderRadius: '20px', border: '2px solid var(--color-ink)', boxShadow: '4px 4px 0px var(--color-ink)' }}>
           <GraduationCap size={32} color="var(--color-ink)" />

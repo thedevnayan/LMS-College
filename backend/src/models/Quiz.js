@@ -56,7 +56,6 @@ const quizSchema = new mongoose.Schema(
   }
 );
 
-quizSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
 quizSchema.pre(/^find/, function () {
   this.where({ deletedAt: null });

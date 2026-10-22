@@ -37,7 +37,7 @@ function Navbar() {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '40px' }}>
         {/* Menu Button as per spec: Black fill, white text, 5px radius */}
-        <Button variant="nav">LMS</Button>
+        <Button variant="nav">SkillBery</Button>
         <div style={{ display: 'flex', gap: '24px' }}>
           {['For Students', 'For Teachers'].map(link => (
             <a key={link} href="#" className="text-body" style={{ textDecoration: 'none', color: 'var(--color-ink)' }}>
@@ -319,7 +319,7 @@ function Footer() {
     <footer style={{ backgroundColor: 'var(--color-paper-white)', borderTop: '1px solid var(--color-ink)', padding: '80px 24px 40px' }}>
       <div className="max-w-screen" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '48px', marginBottom: '80px' }}>
         <div>
-          <div className="text-subheading" style={{ marginBottom: '24px' }}>LMS</div>
+          <div className="text-subheading" style={{ marginBottom: '24px' }}>SkillBery</div>
           <p className="text-body">A premium academic learning management system.</p>
         </div>
         {Object.entries(links).map(([title, items]) => (
@@ -334,7 +334,7 @@ function Footer() {
         ))}
       </div>
       <div className="max-w-screen" style={{ textAlign: 'center', borderTop: '1px solid var(--color-ink)', paddingTop: '40px' }}>
-        <p className="text-caption">© 2026 LMS Platform. All rights reserved.</p>
+        <p className="text-caption">© 2026 SkillBery Platform. All rights reserved.</p>
       </div>
     </footer>
   );

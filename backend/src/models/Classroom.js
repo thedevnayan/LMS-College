@@ -19,6 +19,11 @@ const classroomSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    classBatch: { type: String, trim: true, uppercase: true },
+    labBatch: { type: String, trim: true, uppercase: true, default: null },
+    teachingGroupId: { type: mongoose.Schema.Types.ObjectId, ref: 'TeachingGroup', default: null },
+    allowedEmails: { type: [String], default: [] },
+    enrollmentExpiresAt: { type: Date, default: null },
     session: {
       type: String,
       required: [true, 'Session is required'],
@@ -56,6 +61,7 @@ const classroomSchema = new mongoose.Schema(
       type: Number,
       default: null, // unlimited if null
     },
+    enrollmentRevision: { type: Number, default: 0 },
     deletedAt: {
       type: Date,
       default: null,
@@ -68,8 +74,6 @@ const classroomSchema = new mongoose.Schema(
   }
 );
 
-// TTL Index for soft deletes
-classroomSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
 // Compound index: one classroom per offering + type + practical group
 classroomSchema.index(
@@ -102,7 +106,8 @@ function generateCode() {
 classroomSchema.pre('validate', async function () {
   if (!this.joinCode) {
     // Retry up to 10 times in case of collision
-    const Classroom = mongoose.model('Classroom');
+    classroomSchema.index({ teachingGroupId: 1, isActive: 1, deletedAt: 1 });
+const Classroom = mongoose.model('Classroom');
     let code;
     let attempts = 0;
     do {

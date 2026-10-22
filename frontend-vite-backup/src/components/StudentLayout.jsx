@@ -126,7 +126,7 @@ export default function StudentLayout() {
                 <Search size={32} color="var(--color-ink)" />
               </div>
             </div>
-            <h2 style={{ fontSize: '24px', color: 'var(--color-ink)', marginBottom: '8px' }}>Welcome to LMS!</h2>
+            <h2 style={{ fontSize: '24px', color: 'var(--color-ink)', marginBottom: '8px' }}>Welcome to SkillBery!</h2>
             <p style={{ color: 'var(--color-fog)', fontSize: '15px', marginBottom: '32px' }}>
               You aren't enrolled in any classes yet. Enter your professor's class code to get started.
             </p>
@@ -180,7 +180,7 @@ export default function StudentLayout() {
       }}>
         {/* Brand */}
         <div style={{ padding: '24px', borderBottom: '2px solid var(--color-ink)' }}>
-          <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-1px' }}>Skedio</h2>
+          <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-1px' }}>SkillBery</h2>
           <div style={{ fontSize: '13px', color: 'var(--color-fog)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', marginTop: '4px' }}>
             Student Portal
           </div>

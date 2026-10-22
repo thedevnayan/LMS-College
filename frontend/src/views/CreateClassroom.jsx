@@ -31,67 +31,39 @@ export default function CreateClassroom() {
   
   const [type, setType] = useState('theory');
   
-  const [practicalGroups, setPracticalGroups] = useState([]);
+  const practicalGroups = batches.find(b => b._id === batchId)?.practicalGroups || [];
   const [selectedSubBatches, setSelectedSubBatches] = useState([]);
 
-  useEffect(() => {
-    fetchSessions();
-  }, []);
-
-  const fetchSessions = async () => {
-    try {
-      const res = await academicAPI.getSessions();
-      if (res.success) {
+  function fetchSessions() {
+ return academicAPI.getSessions().then((res) => {
+if (res.success) {
         setSessions(res.data);
         const currentSession = res.data.find(s => s.isCurrent);
         if (currentSession) setSessionId(currentSession._id);
         else if (res.data.length > 0) setSessionId(res.data[0]._id);
       }
-    } catch (err) {
+}).catch((err) => {
       console.error('Failed to fetch sessions:', err);
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
-  };
+    });
+ }
 
-  useEffect(() => {
-    if (sessionId) {
-      fetchBatches();
-    } else {
-      setBatches([]);
-      setBatchId('');
-    }
-  }, [sessionId]);
-
-  const fetchBatches = async () => {
-    try {
-      const res = await academicAPI.getBatches(`academicSessionId=${sessionId}`);
-      if (res.success) {
+  function fetchBatches() {
+ return academicAPI.getBatches(`academicSessionId=${sessionId}`).then((res) => {
+if (res.success) {
         setBatches(res.data);
         if (res.data.length > 0) setBatchId(res.data[0]._id);
         else setBatchId('');
       }
-    } catch (err) {
+}).catch((err) => {
       console.error(err);
-    }
-  };
+    });
+ }
 
-  useEffect(() => {
-    if (batchId) {
-      fetchOfferings();
-      const selectedBatch = batches.find(b => b._id === batchId);
-      setPracticalGroups(selectedBatch?.practicalGroups || []);
-    } else {
-      setOfferings([]);
-      setOfferingId('');
-      setPracticalGroups([]);
-    }
-  }, [batchId, batches]);
-
-  const fetchOfferings = async () => {
-    try {
-      const res = await academicAPI.getOfferings(`academicSessionId=${sessionId}`);
-      if (res.success) {
+  function fetchOfferings() {
+ return academicAPI.getOfferings(`academicSessionId=${sessionId}`).then((res) => {
+if (res.success) {
         const batchOfferings = res.data.filter(o => {
            const tgId = typeof o.teachingGroupId === 'object' ? o.teachingGroupId?._id : o.teachingGroupId;
            return tgId === batchId;
@@ -100,10 +72,32 @@ export default function CreateClassroom() {
         if (batchOfferings.length > 0) setOfferingId(batchOfferings[0]._id);
         else setOfferingId('');
       }
-    } catch (err) {
+}).catch((err) => {
       console.error(err);
+    });
+ }
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+
+
+  useEffect(() => {
+    if (sessionId) {
+      fetchBatches();
     }
-  };
+  }, [sessionId]);
+
+
+
+  useEffect(() => {
+    if (batchId) {
+      fetchOfferings();
+    }
+  }, [batchId, batches]);
+
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -239,7 +233,7 @@ export default function CreateClassroom() {
             <label className="admin-label">Academic Session</label>
             <select
               value={sessionId}
-              onChange={(e) => setSessionId(e.target.value)}
+              onChange={(e) => { setSessionId(e.target.value); setBatches([]); setBatchId(''); setOfferings([]); setOfferingId(''); setSelectedSubBatches([]); }}
               className="admin-input"
               required
             >
@@ -254,7 +248,7 @@ export default function CreateClassroom() {
             <label className="admin-label">Academic Batch</label>
             <select
               value={batchId}
-              onChange={(e) => setBatchId(e.target.value)}
+              onChange={(e) => { setBatchId(e.target.value); setOfferings([]); setOfferingId(''); setSelectedSubBatches([]); }}
               className="admin-input"
               required
             >

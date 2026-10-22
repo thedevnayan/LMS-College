@@ -13,22 +13,23 @@ export default function TestsList() {
   const [loading, setLoading] = useState(true);
   const [showQRForTest, setShowQRForTest] = useState(null);
 
+  function fetchTests() {
+ return testsAPI.getAll().then((res) => {
+if (res.success) {
+        setTests(res.data);
+      }
+}).catch((err) => {
+      console.error('Failed to fetch tests:', err);
+    }).finally(() => {
+      setLoading(false);
+    });
+ }
+
   useEffect(() => {
     fetchTests();
   }, []);
 
-  const fetchTests = async () => {
-    try {
-      const res = await testsAPI.getAll();
-      if (res.success) {
-        setTests(res.data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch tests:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const handleDelete = async (id, e) => {
     e.stopPropagation();

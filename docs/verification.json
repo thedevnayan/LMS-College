@@ -1,0 +1,100 @@
+{
+  "verifiedLocalDate": "2026-10-22",
+  "timezone": "Asia/Calcutta",
+  "node": "26.11.1",
+  "backend": {
+    "command": "npm test",
+    "tests": 43,
+    "passed": 43,
+    "failed": 0,
+    "skipped": 0,
+    "isolatedDatabase": true
+  },
+  "frontend": {
+    "lint": {
+      "command": "npm run lint",
+      "errors": 0,
+      "warnings": 21,
+      "rulesDisabled": false
+    },
+    "build": {
+      "command": "npm run build",
+      "passed": true,
+      "nextVersion": "16.4.2"
+    }
+  },
+  "browser": {
+    "runAt": "2026-10-22T03:13:13.527Z",
+    "browser": "Installed Chrome, headless",
+    "passed": [
+      "student login",
+      "classroom detail",
+      "private text material",
+      "assignment submit and confirmation at mobile viewport",
+      "standard MCQ start/answer/completion",
+      "mobile completion has no horizontal overflow",
+      "reload keeps completed attempt",
+      "other batch forbidden",
+      "admin login and report"
+    ],
+    "pageErrors": [],
+    "externalStorage": "Not exercised"
+  },
+  "dependencies": {
+    "backend": {
+      "lastSuccessfulInstallAuditVulnerabilities": 0,
+      "finalStandaloneAudit": "Unavailable: npm registry bulk advisory endpoint timed out after a bounded retry"
+    },
+    "frontendProduction": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "frontendAll": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 5,
+      "critical": 0,
+      "total": 5
+    }
+  },
+  "load": [
+    {
+      "students": 200,
+      "httpRequests": 1800,
+      "httpP95Ms": 787.68,
+      "answerP95Ms": 1356.08,
+      "releaseP95Ms": 17.99,
+      "errors": 0,
+      "consistency": {
+        "attempts": 200,
+        "passed": true
+      },
+      "reconnections": 20,
+      "environment": "Single local Node process for API and clients; disposable single-node MongoDB replica set. Not a production benchmark."
+    },
+    {
+      "students": 400,
+      "httpRequests": 3600,
+      "httpP95Ms": 1295.53,
+      "answerP95Ms": 2532.31,
+      "releaseP95Ms": 22.86,
+      "errors": 0,
+      "consistency": {
+        "attempts": 400,
+        "passed": true
+      },
+      "reconnections": 40,
+      "environment": "Single local Node process for API and clients; disposable single-node MongoDB replica set. Not a production benchmark."
+    }
+  ],
+  "migration": {
+    "disposableDryRunAndApplyPassed": true,
+    "realDatabaseAccessed": false
+  },
+  "launchRecommendation": "Not Ready"
+}

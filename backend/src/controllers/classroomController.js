@@ -39,7 +39,7 @@ const createClassroom = asyncHandler(async (req, res, next) => {
 
   // Fetch the course offering
   const CourseOffering = require('../models/CourseOffering');
-  const offering = await CourseOffering.findById(courseOfferingId).populate('courseId academicSessionId');
+  const offering = await CourseOffering.findById(courseOfferingId).populate('courseId academicSessionId teachingGroupId');
   
   if (!offering) {
     return next(new ApiError(404, 'NOT_FOUND', 'Course offering not found'));
@@ -53,16 +53,46 @@ const createClassroom = asyncHandler(async (req, res, next) => {
   const courseId = offering.courseId._id;
   const sessionName = offering.academicSessionId ? offering.academicSessionId.name : 'Default Session';
 
+  const group = offering.teachingGroupId;
+  if (!group) throw new ApiError(409, 'INVALID_OFFERING', 'Offering must belong to a batch');
+  const labels = { teachingGroupId: group._id, classBatch: group.name.replace(/^Batch\s+/i, '').toUpperCase() };
   const finalLabBatches = type === 'lab' && Array.isArray(practicalGroupIds) ? practicalGroupIds : [];
 
+  if (type === 'lab' && !finalLabBatches.length) throw new ApiError(400, 'INVALID_LAB', 'Select a lab group');
   try {
-    let createdClassrooms = [];
+    const createdClassrooms = await require('mongoose').connection.transaction(async session => {
+    const createdClassrooms = [];
+    const ensureClassroom = async values => {
+      // Reuse classrooms created by older allocation flows or a retried request.
+      let classroom = await Classroom.findOne({ courseOfferingId, type, practicalGroupId: values.practicalGroupId }).session(session);
+      const allocation = await require('../models/FacultyAllocation').findOne({
+        courseId, teachingGroupId: group._id, academicSessionId: offering.academicSessionId._id,
+        type, practicalGroupId: values.practicalGroupId,
+      }).session(session);
+      if (!classroom) {
+        [classroom] = await Classroom.create([{ ...values, professorId: allocation?.facultyId || values.professorId }], { session });
+      } else {
+        classroom.set(labels);
+        if (values.labBatch) classroom.labBatch = values.labBatch;
+        if (!classroom.enrollmentExpiresAt) classroom.enrollmentExpiresAt = values.enrollmentExpiresAt;
+        await classroom.save({ session });
+      }
+      if (allocation) {
+        allocation.classroomId = classroom._id;
+        await allocation.save({ session });
+      }
+      return classroom;
+    };
     if (type === 'lab' && finalLabBatches.length > 0) {
       for (const pgId of finalLabBatches) {
-        const classroom = await Classroom.create({
+        const pg = await PracticalGroup.findOne({ _id: pgId, teachingGroupId: group._id });
+        if (!pg || (pg.courseOfferingId && String(pg.courseOfferingId) !== String(offering._id))) throw new ApiError(400, 'INVALID_LAB', 'Lab must belong to this offering and batch');
+        const classroom = await ensureClassroom({
+          ...labels, labBatch: pg.name.toUpperCase(),
           courseOfferingId,
           courseId,
-          professorId: req.user._id,
+          professorId: offering.primaryTeacherId,
+          enrollmentExpiresAt: new Date(Date.now() + 7 * 86400000),
           session: sessionName,
           type,
           practicalGroupId: pgId,
@@ -71,10 +101,12 @@ const createClassroom = asyncHandler(async (req, res, next) => {
         createdClassrooms.push(classroom);
       }
     } else {
-      const classroom = await Classroom.create({
+      const classroom = await ensureClassroom({
+        ...labels,
         courseOfferingId,
         courseId,
-        professorId: req.user._id,
+        professorId: offering.primaryTeacherId,
+        enrollmentExpiresAt: new Date(Date.now() + 7 * 86400000),
         session: sessionName,
         type,
         practicalGroupId: null,
@@ -83,7 +115,9 @@ const createClassroom = asyncHandler(async (req, res, next) => {
       createdClassrooms.push(classroom);
     }
 
-    res.status(201).json(successResponse(createdClassrooms, 'Classroom(s) created successfully'));
+    return createdClassrooms;
+    });
+    res.status(201).json(successResponse(createdClassrooms, 'Classroom(s) ready'));
   } catch (err) {
     if (err.code === 11000) {
       return next(new ApiError(409, 'CLASSROOM_EXISTS', 'A classroom of this type already exists for this offering/practical group'));
@@ -153,6 +187,7 @@ const getClassrooms = asyncHandler(async (req, res, next) => {
         }
       }
 
+      if (req.user.role === 'student') { delete obj.enrollmentToken; delete obj.joinCode; delete obj.allowedEmails; }
       return obj;
     })
   );
@@ -189,6 +224,7 @@ const getClassroomById = asyncHandler(async (req, res, next) => {
   }
 
   const classroomData = classroom.toObject();
+  if (req.user.role === 'student') { delete classroomData.enrollmentToken; delete classroomData.joinCode; delete classroomData.allowedEmails; }
 
   // Attach student count
   classroomData.studentCount = await Enrollment.countDocuments({
@@ -270,345 +306,19 @@ const deleteClassroom = asyncHandler(async (req, res, next) => {
  * @access  Admin, Professor
  * @desc    Get or auto-generate single onboarding codes for all batches and sub-batches
  */
-const getBatchCodes = asyncHandler(async (req, res, next) => {
-  const { session } = req.query;
-
-  // Build filter for classrooms
-  const filter = { isActive: true, deletedAt: null };
-  if (session) {
-    filter.session = session;
-  }
-
-  // Find all active classrooms
-  const classrooms = await Classroom.find(filter).populate('courseId', 'title code');
-
-  // Group classrooms by session and classBatch
-  const batchMap = {};
-
-  for (const c of classrooms) {
-    const s = c.session;
-    const b = c.classBatch;
-    if (!s || !b) continue;
-
-    const key = `${s}__${b}`;
-    if (!batchMap[key]) {
-      batchMap[key] = {
-        session: s,
-        classBatch: b,
-        theoryClassrooms: [],
-        labClassrooms: [],
-        labBatchesSet: new Set(),
-      };
-    }
-
-    if (c.type === 'theory') {
-      batchMap[key].theoryClassrooms.push(c);
-    } else if (c.type === 'lab') {
-      batchMap[key].labClassrooms.push(c);
-      if (c.labBatch) {
-        batchMap[key].labBatchesSet.add(c.labBatch);
-      }
-    }
-  }
-
-  const result = [];
-
-  for (const key of Object.keys(batchMap)) {
-    const item = batchMap[key];
-    const labBatches = Array.from(item.labBatchesSet).sort();
-
-    // 1. Ensure Master Batch Code exists
-    let masterCodeDoc = await BatchJoinCode.findOne({
-      session: item.session,
-      classBatch: item.classBatch,
-      labBatch: null,
-      isActive: true,
-      deletedAt: null,
-    });
-
-    if (!masterCodeDoc) {
-      const prefix = `BAT-${item.classBatch}`;
-      const code = await generateUniqueBatchCode(prefix);
-      masterCodeDoc = await BatchJoinCode.create({
-        code,
-        session: item.session,
-        classBatch: item.classBatch,
-        labBatch: null,
-      });
-    }
-
-    // 2. Ensure Sub-Batch codes exist for each lab batch (e.g. B1, B2)
-    const subBatchCodes = [];
-    for (const lb of labBatches) {
-      let subDoc = await BatchJoinCode.findOne({
-        session: item.session,
-        classBatch: item.classBatch,
-        labBatch: lb,
-        isActive: true,
-        deletedAt: null,
-      });
-
-      if (!subDoc) {
-        const prefix = `${item.classBatch}${lb}`;
-        const code = await generateUniqueBatchCode(prefix);
-        subDoc = await BatchJoinCode.create({
-          code,
-          session: item.session,
-          classBatch: item.classBatch,
-          labBatch: lb,
-        });
-      }
-
-      const matchingLabs = item.labClassrooms.filter(c => c.labBatch === lb);
-
-      subBatchCodes.push({
-        _id: subDoc._id,
-        labBatch: lb,
-        code: subDoc.code,
-        enrollmentToken: subDoc.enrollmentToken,
-        labClassesCount: matchingLabs.length,
-        totalClassesCount: item.theoryClassrooms.length + matchingLabs.length,
-      });
-    }
-
-    result.push({
-      session: item.session,
-      classBatch: item.classBatch,
-      masterCode: masterCodeDoc.code,
-      masterCodeId: masterCodeDoc._id,
-      masterEnrollmentToken: masterCodeDoc.enrollmentToken,
-      loginEnabled: masterCodeDoc.loginEnabled !== false,
-      theoryClassesCount: item.theoryClassrooms.length,
-      labClassesCount: item.labClassrooms.length,
-      totalTheoryCourses: Array.from(new Set(item.theoryClassrooms.map(c => c.courseId?.title || 'Unknown'))),
-      subBatches: subBatchCodes,
-    });
-  }
-
-  res.status(200).json(successResponse(result));
-});
+const getBatchCodes = asyncHandler(async (req, res) => {
+    const data = await require('../services/batchAdministration').listInvitations(req.query.session);
+    res.json(successResponse(data));
+  });
 
 /**
  * @route   POST /api/classrooms/join
  * @access  Student only
  * @desc    Join via single batch code OR individual classroom code
  */
-const joinClassroom = asyncHandler(async (req, res, next) => {
-  const { joinCode, labBatch: requestedLabBatch } = req.body;
-
-  if (!joinCode) {
-    return next(new ApiError(400, 'VALIDATION_ERROR', 'A join code is required'));
-  }
-
-  const cleanCode = joinCode.trim().toUpperCase();
-
-  // 1. FIRST: Check if this code is a BatchJoinCode
-  const batchCodeDoc = await BatchJoinCode.findOne({
-    code: cleanCode,
-    isActive: true,
-    deletedAt: null,
+const joinClassroom = asyncHandler(async (req, res) => {
+    throw new ApiError(410, 'INVITATION_REQUIRED', 'Use the administrator-provided enrollment QR invitation. Short join codes are no longer accepted.');
   });
-
-  if (batchCodeDoc) {
-    const { session, classBatch } = batchCodeDoc;
-    const targetLabBatch = (batchCodeDoc.labBatch || requestedLabBatch || '').toUpperCase() || null;
-
-    // Check if this is a master code (labBatch === null) and no labBatch was provided
-    if (!targetLabBatch) {
-      const availableLabs = await Classroom.distinct('labBatch', {
-        session,
-        classBatch,
-        type: 'lab',
-        isActive: true,
-        deletedAt: null,
-      });
-
-      const validLabs = availableLabs.filter(Boolean);
-
-      if (validLabs.length > 0) {
-        // Prompt the student to select their lab group!
-        return res.status(200).json(
-          successResponse(
-            {
-              requiresLabSelection: true,
-              session,
-              classBatch,
-              labBatches: validLabs.sort(),
-              code: batchCodeDoc.code,
-            },
-            `Batch ${classBatch} (${session}) found! Please select your Lab Group to join all classes.`
-          )
-        );
-      }
-    }
-
-    // Now enroll student into:
-    // (a) All theory classrooms for this batch
-    const theoryClassrooms = await Classroom.find({
-      session,
-      classBatch,
-      type: 'theory',
-      isActive: true,
-      deletedAt: null,
-    }).populate('courseId', 'title description published');
-
-    // (b) All lab classrooms for this batch matching targetLabBatch (if any)
-    const labFilter = {
-      session,
-      classBatch,
-      type: 'lab',
-      isActive: true,
-      deletedAt: null,
-    };
-    if (targetLabBatch) {
-      labFilter.labBatch = targetLabBatch;
-    }
-    const labClassrooms = await Classroom.find(labFilter).populate('courseId', 'title description published');
-
-    const allClassesToJoin = [...theoryClassrooms, ...labClassrooms];
-
-    if (allClassesToJoin.length === 0) {
-      return next(new ApiError(404, 'NOT_FOUND', `No active classrooms found for Batch ${classBatch} (${session})`));
-    }
-
-    const enrolledList = [];
-
-    for (const c of allClassesToJoin) {
-      let enr = await Enrollment.findOne({
-        studentId: req.user._id,
-        classroomId: c._id,
-      });
-
-      if (!enr) {
-        enr = await Enrollment.create({
-          studentId: req.user._id,
-          courseId: c.courseId._id,
-          classroomId: c._id,
-          labBatch: c.type === 'lab' ? c.labBatch : null,
-        });
-      }
-
-      if (c.courseId && !c.courseId.published) {
-        await Course.findByIdAndUpdate(c.courseId._id, { published: true });
-      }
-
-      enrolledList.push({
-        classroomId: c._id,
-        courseName: c.courseId?.title,
-        type: c.type,
-        labBatch: c.labBatch,
-      });
-    }
-
-    // Optional: link student to TeachingGroup and StudentEnrollment if available
-    try {
-      const tg = await TeachingGroup.findOne({
-        name: new RegExp(`^Batch ${classBatch}$|^${classBatch}$`, 'i'),
-        deletedAt: null,
-      });
-      if (tg) {
-        const existingStudentEnr = await StudentEnrollment.findOne({
-          studentId: req.user._id,
-          teachingGroupId: tg._id,
-          status: 'Active',
-        });
-        if (!existingStudentEnr) {
-          const instId = tg.institutionId || req.user.institutionId;
-          if (instId) {
-            await StudentEnrollment.create({
-              studentId: req.user._id,
-              institutionId: instId,
-              programId: tg.programId,
-              cohortId: tg.cohortId,
-              academicSessionId: tg.academicSessionId,
-              academicPeriodId: tg.academicPeriodId,
-              teachingGroupId: tg._id,
-              status: 'Active',
-              educationGap: 'None (Continuous Enrollment)',
-            });
-          }
-        }
-      }
-    } catch (tgErr) {
-      console.error('Non-critical: failed to sync TeachingGroup on batch join', tgErr);
-    }
-
-    const labMsg = targetLabBatch ? ` (Lab ${targetLabBatch})` : '';
-    return res.status(201).json(
-      successResponse(
-        {
-          isBatch: true,
-          batch: classBatch,
-          labBatch: targetLabBatch,
-          session,
-          enrolledCount: enrolledList.length,
-          classrooms: enrolledList,
-        },
-        `Successfully joined all ${enrolledList.length} classes for Batch ${classBatch}${labMsg}!`
-      )
-    );
-  }
-
-  // 2. SECOND: Check if this code matches an individual Classroom.joinCode
-  const classroom = await Classroom.findOne({
-    joinCode: cleanCode,
-    isActive: true,
-    deletedAt: null,
-  }).populate('courseId', 'title description thumbnail published');
-
-  if (!classroom) {
-    return next(new ApiError(404, 'NOT_FOUND', 'Invalid or expired join code'));
-  }
-
-  // Check max students
-  if (classroom.maxStudents) {
-    const currentCount = await Enrollment.countDocuments({
-      classroomId: classroom._id,
-      deletedAt: null,
-    });
-    if (currentCount >= classroom.maxStudents) {
-      return next(new ApiError(409, 'CLASSROOM_FULL', 'This classroom has reached its maximum capacity'));
-    }
-  }
-
-  // Check existing enrollment
-  let enrollment = await Enrollment.findOne({
-    studentId: req.user._id,
-    classroomId: classroom._id,
-  });
-
-  if (enrollment) {
-    return next(new ApiError(409, 'ALREADY_ENROLLED', 'You are already enrolled in this classroom'));
-  }
-
-  enrollment = await Enrollment.create({
-    studentId: req.user._id,
-    courseId: classroom.courseId._id,
-    classroomId: classroom._id,
-    labBatch: classroom.type === 'lab' ? classroom.labBatch : null,
-  });
-
-  if (!classroom.courseId.published) {
-    await Course.findByIdAndUpdate(classroom.courseId._id, { published: true });
-  }
-
-  res.status(201).json(
-    successResponse(
-      {
-        enrollment,
-        classroom: {
-          _id: classroom._id,
-          session: classroom.session,
-          classBatch: classroom.classBatch,
-          type: classroom.type,
-          labBatch: classroom.labBatch,
-          courseName: classroom.courseId.title,
-        },
-      },
-      `Successfully joined ${classroom.courseId.title}!`
-    )
-  );
-});
 
 /**
  * @route   GET /api/classrooms/:id/students
@@ -622,7 +332,7 @@ const getClassroomStudents = asyncHandler(async (req, res, next) => {
     return next(new ApiError(404, 'NOT_FOUND', 'Classroom not found'));
   }
 
-  if (classroom.professorId.toString() !== req.user._id.toString()) {
+  if (req.user.role !== 'admin' && classroom.professorId.toString() !== req.user._id.toString()) {
     return next(new ApiError(403, 'FORBIDDEN', 'Not authorized'));
   }
 
@@ -657,7 +367,7 @@ const regenerateCode = asyncHandler(async (req, res, next) => {
     return next(new ApiError(404, 'NOT_FOUND', 'Classroom not found'));
   }
 
-  if (classroom.professorId.toString() !== req.user._id.toString()) {
+  if (req.user.role !== 'admin' && classroom.professorId.toString() !== req.user._id.toString()) {
     return next(new ApiError(403, 'FORBIDDEN', 'Not authorized'));
   }
 
@@ -676,25 +386,18 @@ const regenerateCode = asyncHandler(async (req, res, next) => {
   }
 
   classroom.joinCode = code;
+  classroom.enrollmentExpiresAt = new Date(Date.now() + 7 * 86400000);
   classroom.enrollmentToken = uuidv4(); // Regenerate enrollment token (invalidates old QR)
   await classroom.save();
 
   res.status(200).json(successResponse({ joinCode: code, enrollmentToken: classroom.enrollmentToken }, 'Join code and QR regenerated'));
 });
 
-const toggleBatchLogin = asyncHandler(async (req, res, next) => {
-  const batchCode = await BatchJoinCode.findById(req.params.id);
-  if (!batchCode) return next(new ApiError(404, 'NOT_FOUND', 'Batch code not found'));
-  
-  if (req.user.role !== 'admin' && req.user.role !== 'professor') {
-    return next(new ApiError(403, 'FORBIDDEN', 'Not authorized'));
-  }
-
-  batchCode.loginEnabled = !batchCode.loginEnabled;
-  await batchCode.save();
-
-  res.status(200).json(successResponse({ loginEnabled: batchCode.loginEnabled }, `Login access ${batchCode.loginEnabled ? 'enabled' : 'revoked'} for Batch ${batchCode.classBatch}`));
-});
+const toggleBatchLogin = asyncHandler(async (req, res) => {
+    const { setBatchAccess } = require('../services/batchAdministration');
+    const data = await setBatchAccess([req.params.id], req.body.loginEnabled, req.user);
+    res.json(successResponse(data[0], 'Batch access updated'));
+  });
 
 module.exports = {
   createClassroom,

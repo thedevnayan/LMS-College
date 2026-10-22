@@ -170,7 +170,7 @@ export default function StudentClassroomDetail() {
                     <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-ink)', marginBottom: '4px' }}>{task.title}</h3>
                     {task.submissionStatus !== 'unsubmitted' ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#166534', fontSize: '13px', fontWeight: 600 }}>
-                        <CheckSquare size={14} /> Submitted on: {new Date(task.submittedAt || task.updatedAt || Date.now()).toLocaleDateString()}
+                        <CheckSquare size={14} /> Submitted on: {new Date(task.submittedAt || task.updatedAt || task.createdAt).toLocaleDateString()}
                       </div>
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#991b1b', fontSize: '13px', fontWeight: 600 }}>
@@ -195,7 +195,7 @@ export default function StudentClassroomDetail() {
                     fontSize: '15px'
                   }}
                 >
-                  {task.submissionStatus !== 'unsubmitted' ? 'Completed' : 'Open'}
+                  {task.submissionStatus !== 'unsubmitted' ? 'View Report' : 'Open'}
                 </button>
               </div>
             ))}
@@ -231,7 +231,7 @@ export default function StudentClassroomDetail() {
                   </div>
                 </div>
                 <button 
-                  onClick={() => router.push(`/classrooms/${id}/tests/${test._id}/join`)}
+                  onClick={() => router.push(test.attemptStatus === 'completed' ? `/tests/${test._id}/report` : `/classrooms/${id}/tests/${test._id}/join`)}
                   style={{ 
                     display: 'flex', 
                     alignItems: 'center', 
@@ -247,7 +247,7 @@ export default function StudentClassroomDetail() {
                     boxShadow: '4px 4px 0px var(--color-ink)'
                   }}
                 >
-                  <PlayCircle size={18} /> Start
+                  <PlayCircle size={18} /> {test.attemptStatus === 'completed' ? 'View Report' : 'Start'}
                 </button>
               </div>
             ))}

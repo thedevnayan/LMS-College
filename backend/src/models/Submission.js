@@ -64,7 +64,6 @@ const submissionSchema = new mongoose.Schema(
   }
 );
 
-submissionSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
 // Ensure a student can only submit once per assignment
 submissionSchema.index(

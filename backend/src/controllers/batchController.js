@@ -167,7 +167,7 @@ const unassignStudent = asyncHandler(async (req, res, next) => {
   const enrollment = await Enrollment.findOneAndUpdate(
     { studentId: req.params.studentId, courseId: batch.courseId, batchId: batch._id },
     { batchId: null },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   if (!enrollment) {

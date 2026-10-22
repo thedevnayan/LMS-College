@@ -1,5 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-export const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace('/api', '') : 'http://localhost:5000';
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+export const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, '') : 'http://localhost:5000';
 /**
  * Get the stored access token
  */
@@ -21,7 +21,8 @@ export const removeToken = () => localStorage.removeItem('accessToken');
 /**
  * Core fetch wrapper with auth headers, error handling, and token refresh
  */
-async function request(endpoint, options = {}) {
+let refreshFlight = null;
+export async function request(endpoint, options = {}) {
   const { body, method = 'GET', headers = {} } = options;
 
   const isFormData = body instanceof FormData;
@@ -46,34 +47,40 @@ async function request(endpoint, options = {}) {
 
   let res = await fetch(`${API_BASE}${endpoint}`, config);
 
-  // If 401, try to refresh the token once
-  if (res.status === 401 && token) {
-    const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    if (refreshRes.ok) {
-      const refreshData = await refreshRes.json();
-      if (refreshData.success && refreshData.data.accessToken) {
-        setToken(refreshData.data.accessToken);
-        config.headers['Authorization'] = `Bearer ${refreshData.data.accessToken}`;
-        res = await fetch(`${API_BASE}${endpoint}`, config);
-      }
+  // Retry once; login and refresh failures must not refresh recursively.
+  if (res.status === 401 && token && !['/auth/login', '/auth/register', '/auth/refresh'].includes(endpoint)) {
+    const currentToken = getToken();
+    if (currentToken && currentToken !== token) {
+      config.headers.Authorization = `Bearer ${currentToken}`;
+      res = await fetch(`${API_BASE}${endpoint}`, config);
     } else {
-      // Refresh failed — clear token and redirect to student login
-      removeToken();
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
-      }
-      throw new Error('Session expired');
+      if (!refreshFlight) refreshFlight = fetch(API_BASE + '/auth/refresh', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      }).then(async response => {
+        const data = await response.json().catch(() => null);
+        if (response.ok && data?.success && data.data?.accessToken) {
+          // Store before releasing the flight so late 401s reuse this token.
+          setToken(data.data.accessToken);
+          return data.data.accessToken;
+        }
+        const error = new Error(data?.error?.message || 'Session refresh temporarily unavailable. Please try again.');
+        error.status = response.status;
+        error.code = data?.error?.code || 'REFRESH_UNAVAILABLE';
+        if (response.status === 401 || response.status === 403) {
+          removeToken();
+          if (typeof window !== 'undefined') window.location.href = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/login';
+        }
+        throw error;
+      }).finally(() => { refreshFlight = null; });
+      const accessToken = await refreshFlight;
+      config.headers.Authorization = `Bearer ${accessToken}`;
+      res = await fetch(`${API_BASE}${endpoint}`, config);
     }
   }
-
   const data = await res.json();
 
   if (!res.ok) {
+    if (data?.error?.code === 'LOGIN_REVOKED') window.dispatchEvent(new CustomEvent('skillbery-access-error', { detail: data.error.message }));
     const error = new Error(data?.error?.message || 'Something went wrong');
     error.code = data?.error?.code;
     error.status = res.status;
@@ -117,6 +124,12 @@ export const coursesAPI = {
 // ─── Materials API ───
 
 export const materialsAPI = {
+  download: async (id, imageIndex) => {
+    await authAPI.me();
+    const response = await fetch(API_BASE + '/materials/' + id + (imageIndex === undefined ? '/file' : '/images/' + imageIndex), { headers: { Authorization: 'Bearer ' + getToken() } });
+    if (!response.ok) { const error = await response.json(); throw new Error(error.error?.message || 'Download failed'); }
+    return response.blob();
+  },
   getAll: () => request('/materials'),
   listByClassroom: (classroomId) => request(`/classrooms/${classroomId}/materials`),
   create: (classroomId, data) => request(`/classrooms/${classroomId}/materials`, { method: 'POST', body: data }), // data is FormData
@@ -139,6 +152,7 @@ export const testsAPI = {
   verifyJoinCode: (code) => request(`/tests/join/${code}`),
   getLiveState: (id) => request(`/tests/${id}/live-state`),
   getMyAttempt: (id) => request(`/tests/${id}/my-attempt`),
+  getMyReport: (id) => request(`/tests/${id}/my-report`),
   getReport: (id) => request(`/tests/${id}/report`),
   joinGuestTest: (data) => request('/tests/join-guest', { method: 'POST', body: data }),
   getGuestLiveState: (sessionToken, guestId) => request(`/tests/session/${sessionToken}/state${guestId ? '?guestId=' + guestId : ''}`),
@@ -159,6 +173,9 @@ export const aiAPI = {
 // ─── Classrooms API ───
 
 export const classroomsAPI = {
+  setBatchAccess: (id, loginEnabled) => request('/classrooms/batch-codes/' + id + '/toggle-login', { method: 'PATCH', body: { loginEnabled } }),
+  updateInvitation: (id, body) => request('/classrooms/batch-codes/' + id + '/invitation', { method: 'PATCH', body }),
+  createTeacher: body => request('/users', { method: 'POST', body }),
   list: (params = '') => request(`/classrooms${params ? '?' + params : ''}`),
 
   create: (data) => request('/classrooms', { method: 'POST', body: data }),
@@ -195,7 +212,7 @@ export const assignmentsAPI = {
   listByClassroom: (classroomId) => request(`/classrooms/${classroomId}/assignments`),
   create: (classroomId, data) => request(`/classrooms/${classroomId}/assignments`, { method: 'POST', body: data }),
   getById: (id) => request(`/assignments/${id}`),
-  update: (id, data) => request(`/assignments/${id}`, { method: 'PUT', body: data }),
+  update: (id, data) => request(`/assignments/${id}`, { method: 'PATCH', body: data }),
   delete: (id) => request(`/assignments/${id}`, { method: 'DELETE' }),
   getSubmissions: (id) => request(`/assignments/${id}/submissions`),
   submit: (id, data) => request(`/assignments/${id}/submit`, { method: 'POST', body: data }),

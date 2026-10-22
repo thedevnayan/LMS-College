@@ -36,9 +36,37 @@ export default function TestBuilder() {
   const questionsEndRef = useRef(null);
 
   const [draftRestored, setDraftRestored] = useState(false);
+  const [draftLoaded, setDraftLoaded] = useState(false);
+
+  function fetchClassrooms() {
+ return classroomsAPI.list().then((res) => {
+if (res.success) setClassrooms(res.data);
+}).catch((err) => {
+      console.error(err);
+    });
+ }
+
+  function fetchTest() {
+ return testsAPI.getById(id).then((res) => {
+if (res.success) {
+        const test = res.data;
+        setFormData({
+          title: test.title,
+          description: test.description || '',
+          classroomId: test.classroomId._id,
+          testType: test.testType,
+          status: test.status,
+          timeLimit: test.timeLimit || 0,
+          questions: test.questions || []
+        });
+      }
+}).catch((err) => {
+      console.error(err);
+    });
+ }
 
   useEffect(() => {
-    fetchClassrooms();
+    fetchClassrooms().then(() => {
     if (isEditing) {
       fetchTest();
     } else {
@@ -54,42 +82,19 @@ export default function TestBuilder() {
         }
       }
     }
+    setDraftLoaded(true);
+    });
   }, [id]);
 
   useEffect(() => {
-    if (!isEditing && formData.title !== undefined) {
+    if (draftLoaded && !isEditing && formData.title !== undefined) {
       localStorage.setItem('lms_test_builder_draft', JSON.stringify(formData));
     }
-  }, [formData, isEditing]);
+  }, [formData, isEditing, draftLoaded]);
 
-  const fetchClassrooms = async () => {
-    try {
-      const res = await classroomsAPI.list();
-      if (res.success) setClassrooms(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
-  const fetchTest = async () => {
-    try {
-      const res = await testsAPI.getById(id);
-      if (res.success) {
-        const test = res.data;
-        setFormData({
-          title: test.title,
-          description: test.description || '',
-          classroomId: test.classroomId._id,
-          testType: test.testType,
-          status: test.status,
-          timeLimit: test.timeLimit || 0,
-          questions: test.questions || []
-        });
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
+
+
 
   const classroomOptions = classrooms.map(c => ({
     value: c._id,

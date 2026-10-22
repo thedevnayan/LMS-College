@@ -6,7 +6,7 @@ import { materialsAPI } from '@/services/api';
 import { ArrowLeft, BookOpen, Download, ExternalLink, Maximize2, Minimize2, CheckCircle } from 'lucide-react';
 
 export default function StudentMaterialView() {
-  const { classroomId, materialId } = useParams();
+  const { id: classroomId, materialId } = useParams();
   const router = useRouter();
 
   const [material, setMaterial] = useState(null);
@@ -18,11 +18,24 @@ export default function StudentMaterialView() {
   const [markingComplete, setMarkingComplete] = useState(false);
 
   useEffect(() => {
+    let objectUrl;
+    const galleryUrls = [];
+    let cancelled = false;
     const fetchMaterial = async () => {
       try {
         const res = await materialsAPI.getById(materialId);
         if (res.success) {
-          setMaterial(res.data);
+          const data = res.data;
+          if (data.images?.length) {
+            for (const image of data.images) {
+              const blob = await materialsAPI.download(materialId, image.index);
+              if (cancelled) return;
+              image.url = URL.createObjectURL(blob);
+              galleryUrls.push(image.url);
+            }
+            data.url = data.images[0].url;
+          } else if (data.privateFile) { objectUrl = URL.createObjectURL(await materialsAPI.download(materialId)); data.url = objectUrl; }
+          if (!cancelled) setMaterial(data); else if (objectUrl) URL.revokeObjectURL(objectUrl);
         }
       } catch (err) {
         setError(err.message || 'Failed to load material');
@@ -31,6 +44,7 @@ export default function StudentMaterialView() {
       }
     };
     fetchMaterial();
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); galleryUrls.forEach(url => URL.revokeObjectURL(url)); };
   }, [materialId]);
 
   const handleMarkComplete = async () => {
@@ -52,6 +66,7 @@ export default function StudentMaterialView() {
    */
   const getViewerUrl = (url, type) => {
     if (!url) return null;
+    if (material?.privateFile && ['docx', 'pptx'].includes(material.fileFormat)) return null;
     // PDFs — use browser's native PDF viewer directly
     if (type === 'pdf') {
       return url;
@@ -67,6 +82,9 @@ export default function StudentMaterialView() {
   };
 
   const renderViewer = () => {
+    if (material?.type === 'text' && material.content && !material.url) {
+      return <article style={{ padding: 32, background: 'white', color: 'var(--color-ink)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{material.content}</article>;
+    }
     if (!material || !material.url) {
       return (
         <div style={styles.noPreview}>
@@ -80,6 +98,13 @@ export default function StudentMaterialView() {
 
     // Images — render inline
     if (type === 'image') {
+      if (material.images?.length) return <div style={{ display: 'grid', gap: 24, padding: 16, width: '100%', overflowY: 'auto' }}>
+        {material.images.map((image, index) => <figure key={image.index} style={{ margin: 0, textAlign: 'center' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={image.url} alt={`${material.title} — image ${index + 1}`} style={{ maxWidth: '100%', height: 'auto', borderRadius: 12 }} />
+          <figcaption style={{ padding: 8 }}>Image {index + 1} of {material.images.length} · <a href={image.url} download={image.name}>Download image</a></figcaption>
+        </figure>)}
+      </div>;
       return (
         <div style={styles.imageContainer}>
           <img
@@ -136,7 +161,7 @@ export default function StudentMaterialView() {
               </a>
             </div>
           ) : (
-            <iframe
+            <iframe sandbox="allow-same-origin" referrerPolicy="no-referrer"
               src={viewerUrl}
               title={material.title}
               style={{

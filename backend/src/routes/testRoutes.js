@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true }); // Important for nested routes like /classrooms/:classroomId/tests
 const testController = require('../controllers/testController');
-const { protect } = require('../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
 
 // --- Public/Guest Routes ---
 
@@ -20,7 +20,7 @@ router.route('/')
     // If mounted at /tests
     return testController.getAllTestsForProfessor(req, res, next);
   })
-  .post((req, res, next) => {
+  .post(authorize('professor'), (req, res, next) => {
     if (req.params.classroomId) {
       return testController.createTest(req, res, next);
     }
@@ -31,20 +31,22 @@ router.route('/join/:code')
   .get(testController.verifyJoinCode);
 
 router.route('/:id/join-code')
-  .patch(testController.generateJoinCode);
+  .patch(authorize('professor'), testController.generateJoinCode);
 
 router.route('/:id/live-state')
-  .get(testController.getLiveState);
+  .get(authorize('professor'), testController.getLiveState);
 
 router.route('/:id/my-attempt')
   .get(testController.getMyAttempt);
 
+router.get('/:id/my-report', authorize('student'), testController.getMyReport);
+
 router.route('/:id/report')
-  .get(testController.getTestReport);
+  .get(authorize('professor'), testController.getTestReport);
 
 router.route('/:id')
   .get(testController.getTestById)
   .patch(testController.updateTest)
-  .delete(testController.deleteTest);
+  .delete(authorize('professor'), testController.deleteTest);
 
 module.exports = router;

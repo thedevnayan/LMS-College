@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { testsAPI, SOCKET_URL } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
-import { io } from 'socket.io-client';
+import { connectSocket as io } from '@/services/socket';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { PlayCircle, Users, Trophy, FastForward, CheckCircle2, WifiOff, Wifi, QrCode, X, Zap } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -28,10 +28,9 @@ export default function LiveTestDashboard() {
   const [showQR, setShowQR] = useState(false);
 
   // ── Fetch full live state from DB (survives refresh/disconnect) ──
-  const restoreState = async () => {
-    try {
-      const res = await testsAPI.getLiveState(testId);
-      if (res.success) {
+  const restoreState = () => {
+ return testsAPI.getLiveState(testId).then((res) => {
+if (res.success) {
         const { test: testData, currentQuestionIndex: qi, turnUserId: tu, liveStatus, students: dbStudents } = res.data;
         setTest(testData);
         setCurrentQuestionIndex(qi);
@@ -49,12 +48,12 @@ export default function LiveTestDashboard() {
           return merged;
         });
       }
-    } catch (err) {
+}).catch((err) => {
       console.error('Failed to restore live state:', err);
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
-  };
+    });
+ };
 
   useEffect(() => {
     restoreState();
@@ -70,9 +69,13 @@ export default function LiveTestDashboard() {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
     });
-    setSocket(newSocket);
 
+
+    newSocket.on('operation_error', error => toast.error(error.message));
+    newSocket.on('connect_error', error => toast.error(error.message));
+    newSocket.on('participant_disconnected', data => setStudents(prev => prev.map(s => String(s.userId) === String(data.userId) ? { ...s, connected: false } : s)));
     newSocket.on('connect', () => {
+      setSocket(newSocket);
       setConnected(true);
       newSocket.emit('join_test', {
         testId,
@@ -147,7 +150,7 @@ export default function LiveTestDashboard() {
     try {
       await testsAPI.update(testId, { liveStatus: 'in-progress' });
       setTestStarted(true);
-      socket.emit('start_test', { testId });
+      await restoreState();
       
       if (test.testType === 'live-round-robin' && students.length > 0) {
         const randomStudent = students[Math.floor(Math.random() * students.length)];
@@ -162,19 +165,16 @@ export default function LiveTestDashboard() {
     }
   };
 
-  const handleNextQuestion = () => {
+  const handleNextQuestion = async () => {
+    if (!socket?.connected) return toast.error('Reconnect before advancing');
     const nextIdx = currentQuestionIndex + 1;
-    setCurrentQuestionIndex(nextIdx);
-    
-    let nextTurn = null;
-    if (test.testType === 'live-round-robin' && students.length > 0) {
-      const randomStudent = students[Math.floor(Math.random() * students.length)];
-      nextTurn = randomStudent.userId;
-      setTurnUserId(nextTurn);
-      toast.info(`🎲 It's ${randomStudent.userName}'s turn!`, { style: { fontWeight: 800 } });
-    }
-    
-    socket.emit('next_question', { testId, nextQuestionIndex: nextIdx, turnUserId: nextTurn });
+    const eligible = students.filter(s => !s.completed);
+    const nextTurn = test.testType === 'live-round-robin' ? eligible[nextIdx % Math.max(1, eligible.length)]?.userId : null;
+    try {
+      const response = await socket.timeout(10000).emitWithAck('next_question', { testId, nextQuestionIndex: nextIdx, turnUserId: nextTurn });
+      if (!response.success) throw new Error(response.error.message);
+      await restoreState();
+    } catch (error) { toast.error(error.message); }
   };
 
   if (loading || !test) return <div className="admin-spinner" style={{ margin: '100px auto' }} />;
@@ -237,7 +237,7 @@ export default function LiveTestDashboard() {
             <span style={{ color: 'var(--color-fog)', fontWeight: 600 }}>
               Join Code: <strong style={{ color: 'var(--color-ink)', fontSize: '20px', letterSpacing: '2px' }}>{test.joinCode || 'NONE'}</strong>
             </span>
-            {test.sessionToken && (
+            {false && test.sessionToken && (
               <button 
                 onClick={() => setShowQR(true)}
                 className="admin-btn-outline"

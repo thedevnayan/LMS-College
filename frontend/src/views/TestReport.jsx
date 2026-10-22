@@ -26,23 +26,24 @@ export default function TestReport() {
   const [loading, setLoading] = useState(true);
   const [expandedAttemptId, setExpandedAttemptId] = useState(null);
 
+  function fetchReport() {
+ return testsAPI.getReport(id).then((res) => {
+if (res.success) {
+        setData(res.data);
+      }
+}).catch((err) => {
+      console.error('Failed to fetch test report:', err);
+    }).finally(() => {
+      setLoading(false);
+    });
+ }
+
   useEffect(() => {
     if (authLoading || !isAuthenticated) return;
     fetchReport();
   }, [id, isAuthenticated, authLoading]);
 
-  const fetchReport = async () => {
-    try {
-      const res = await testsAPI.getReport(id);
-      if (res.success) {
-        setData(res.data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch test report:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
 
   if (loading) {

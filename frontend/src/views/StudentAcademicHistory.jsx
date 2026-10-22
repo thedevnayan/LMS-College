@@ -18,25 +18,25 @@ export default function StudentAcademicHistory({ studentId }) {
   const [selectedSessionIdx, setSelectedSessionIdx] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  function fetchStudentHistory() {
+ return misAPI.getStudentHistory(targetId).then((res) => {
+if (res.success) {
+        setProfileData(res.data);
+      }
+}).catch((err) => {
+      console.error('Failed to load student academic history:', err);
+    }).finally(() => {
+      setLoading(false);
+    });
+ }
+
   useEffect(() => {
     if (targetId) {
       fetchStudentHistory();
     }
   }, [targetId]);
 
-  const fetchStudentHistory = async () => {
-    try {
-      setLoading(true);
-      const res = await misAPI.getStudentHistory(targetId);
-      if (res.success) {
-        setProfileData(res.data);
-      }
-    } catch (err) {
-      console.error('Failed to load student academic history:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   if (loading) {
     return (

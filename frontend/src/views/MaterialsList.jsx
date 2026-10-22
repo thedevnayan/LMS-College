@@ -17,22 +17,23 @@ export default function MaterialsList() {
   const [viewerError, setViewerError] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
+  function fetchMaterials() {
+ return materialsAPI.getAll().then((res) => {
+if (res.success) {
+        setMaterials(res.data);
+      }
+}).catch((err) => {
+      console.error('Failed to fetch materials:', err);
+    }).finally(() => {
+      setLoading(false);
+    });
+ }
+
   useEffect(() => {
     fetchMaterials();
   }, []);
 
-  const fetchMaterials = async () => {
-    try {
-      const res = await materialsAPI.getAll();
-      if (res.success) {
-        setMaterials(res.data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch materials:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const handleDelete = async (id, e) => {
     e.stopPropagation();

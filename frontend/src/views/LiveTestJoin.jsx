@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { testsAPI } from '@/services/api';
 import { ArrowRight, CheckCircle, Clock } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { io } from 'socket.io-client';
+import { connectSocket as io } from '@/services/socket';
 
 export default function LiveTestJoin() {
   const [code, setCode] = useState('');
@@ -25,22 +25,7 @@ export default function LiveTestJoin() {
     try {
       const res = await testsAPI.verifyJoinCode(code);
       if (res.success) {
-        setJoinedTest(res.data);
-        
-        // Initialize Socket
-        const newSocket = io('http://localhost:5000');
-        setSocket(newSocket);
-        
-        newSocket.emit('join_test', { 
-          testId: res.data.testId, 
-          userId: user._id, 
-          userName: user.name, 
-          role: 'student' 
-        });
-
-        newSocket.on('test_started', () => {
-          router.push(`/live-test/${res.data.testId}`);
-        });
+        router.push(`/live-test/${res.data.testId}`);
       }
     } catch (err) {
       setError(err.message || 'Invalid join code or you are not enrolled.');
@@ -58,7 +43,7 @@ export default function LiveTestJoin() {
             Join Live Test
           </h1>
           <p style={{ color: 'var(--color-fog)', marginBottom: '32px' }}>
-            Enter the 6-character code provided by your professor.
+            Enter the 12-character code provided by your professor.
           </p>
 
           <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -66,8 +51,8 @@ export default function LiveTestJoin() {
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="e.g. A1B2C3"
-              maxLength={6}
+              placeholder="e.g. A1B2C3D4E5F6"
+              maxLength={12}
               style={{
                 padding: '16px',
                 fontSize: '24px',
@@ -84,7 +69,7 @@ export default function LiveTestJoin() {
             
             <button
               type="submit"
-              disabled={loading || code.length !== 6}
+              disabled={loading || code.length !== 12}
               className="admin-btn-primary"
               style={{ padding: '16px', fontSize: '18px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
             >
@@ -99,7 +84,7 @@ export default function LiveTestJoin() {
             <CheckCircle size={48} color="#16a34a" />
           </div>
           <h2 style={{ fontSize: '24px', color: 'var(--color-ink)', marginBottom: '8px' }}>
-            You're in!
+            You&apos;re in!
           </h2>
           <div style={{ padding: '16px', backgroundColor: 'var(--color-warm-linen)', borderRadius: '12px', border: '2px solid var(--color-ink)', marginBottom: '24px' }}>
             <div style={{ fontSize: '14px', color: 'var(--color-fog)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>Test Topic</div>

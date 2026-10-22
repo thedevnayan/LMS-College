@@ -14,14 +14,8 @@ class ApiError extends Error {
  * Global error handling middleware
  */
 const errorHandler = (err, req, res, next) => {
-  // Only log full stack in development
-  if (process.env.NODE_ENV === 'development') {
-    console.error(err);
-  } else {
-    console.error(`[${err.errorCode || 'ERROR'}] ${err.message}`);
-  }
-
-  let statusCode = err.statusCode || 500;
+  let statusCode = err.statusCode || err.status || 500;
+  if (err.name === 'MulterError') statusCode = 400;
   let errorCode = err.errorCode || 'SERVER_ERROR';
   let message = err.message || 'Internal Server Error';
   let fields = err.fields;
@@ -35,14 +29,14 @@ const errorHandler = (err, req, res, next) => {
     for (const field in err.errors) {
       fields[field] = err.errors[field].message;
     }
-    console.error('=> VALIDATION FIELDS FAILING:', JSON.stringify(fields, null, 2));
+
   }
   
   // Handle Mongoose CastError (invalid ObjectId etc.)
   if (err.name === 'CastError') {
     statusCode = 400;
     errorCode = 'INVALID_ID';
-    message = `Invalid ${err.path}: ${err.value}`;
+    message = 'Invalid identifier';
   }
 
   // Handle Mongoose Duplicate Key Error
@@ -69,8 +63,18 @@ const errorHandler = (err, req, res, next) => {
     message = 'Token expired';
   }
 
+  const { databaseUnavailable, diagnostic } = require('../utils/runtimeError');
+  if (databaseUnavailable(err)) {
+    statusCode = 503;
+    errorCode = 'DATABASE_UNAVAILABLE';
+    message = 'Database temporarily unavailable. Please try again shortly.';
+    res.set('Retry-After', '5');
+  }
+  console.error(JSON.stringify({ event: 'request_error', code: errorCode, status: statusCode,
+    method: req.method, route: req.route?.path || 'unmatched', ...diagnostic(err) }));
+
   // Never leak internal error details in production
-  if (statusCode === 500 && process.env.NODE_ENV === 'production') {
+  if (statusCode >= 500 && !(err instanceof ApiError) && errorCode !== 'DATABASE_UNAVAILABLE') {
     message = 'Internal Server Error';
   }
 
@@ -83,7 +87,7 @@ const errorHandler = (err, req, res, next) => {
   };
 
   if (fields && Object.keys(fields).length > 0) {
-    response.error.fields = fields;
+    response.error.fields = process.env.NODE_ENV === 'production' ? Object.fromEntries(Object.keys(fields).map(k => [k, 'Invalid value'])) : fields;
   }
 
   res.status(statusCode).json(response);

@@ -12,6 +12,7 @@ const updateValidation = [
 ];
 
 router.use(protect); // All user routes require authentication
+router.patch('/:id/enrollment-approval', userController.approveEnrollment);
 
 router.route('/')
   .post(validate([

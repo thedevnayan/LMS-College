@@ -1,0 +1,23 @@
+{
+  "runAt": "2026-10-22T15:26:13.586Z",
+  "browser": "Installed Chrome, headless",
+  "passed": [
+    "assignment report and saved submission survive reload",
+    "completed test report shows score and correct answers",
+    "test report survives reload without mobile overflow",
+    "QR defaults to registration",
+    "QR login/register toggle preserves token and form",
+    "QR registration enrolls without creating classrooms",
+    "student login",
+    "classroom detail",
+    "private text material",
+    "assignment submit and confirmation at mobile viewport",
+    "standard MCQ start/answer/completion",
+    "mobile completion has no horizontal overflow",
+    "reload keeps completed attempt",
+    "other batch forbidden",
+    "admin login and report"
+  ],
+  "pageErrors": [],
+  "externalStorage": "Not exercised"
+}

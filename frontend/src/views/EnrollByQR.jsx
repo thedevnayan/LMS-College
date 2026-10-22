@@ -21,7 +21,7 @@ export default function EnrollByQR() {
   const [tokenError, setTokenError] = useState('');
 
   // Auth form state
-  const [isNewAccount, setIsNewAccount] = useState(false);
+  const [isNewAccount, setIsNewAccount] = useState(true);
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
@@ -35,15 +35,9 @@ export default function EnrollByQR() {
   // Success state
   const [enrollResult, setEnrollResult] = useState(null);
 
-  useEffect(() => {
-    fetchTokenInfo();
-  }, [token]);
-
-  const fetchTokenInfo = async () => {
-    try {
-      setTokenLoading(true);
-      const res = await enrollAPI.getTokenInfo(token);
-      if (res.success) {
+  function fetchTokenInfo() {
+ return enrollAPI.getTokenInfo(token).then((res) => {
+if (res.success) {
         setTokenInfo(res.data);
         if (res.data.requiresLabSelection && res.data.availableLabBatches?.length > 0) {
           setRequiresLabSelection(true);
@@ -51,12 +45,18 @@ export default function EnrollByQR() {
           setSelectedLabBatch(res.data.availableLabBatches[0]);
         }
       }
-    } catch (err) {
+}).catch((err) => {
       setTokenError(err.message || 'This enrollment link is invalid or has expired.');
-    } finally {
+    }).finally(() => {
       setTokenLoading(false);
-    }
-  };
+    });
+ }
+
+  useEffect(() => {
+    fetchTokenInfo();
+  }, [token]);
+
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -165,13 +165,13 @@ export default function EnrollByQR() {
           </div>
 
           <h2 style={{ fontSize: '24px', color: 'var(--color-ink)', marginBottom: '8px', textAlign: 'center', fontWeight: 800 }}>
-            You're In!
+            You&apos;re In!
           </h2>
 
           <p style={{ color: 'var(--color-fog)', fontSize: '15px', textAlign: 'center', marginBottom: '24px' }}>
             {enrollResult.isBatch
               ? `Successfully enrolled in ${enrollResult.enrolledCount} classes for Batch ${enrollResult.batch}!`
-              : `Successfully enrolled in ${enrollResult.classroom?.courseName}!`
+              : 'Successfully enrolled in your class!'
             }
           </p>
 
@@ -317,7 +317,7 @@ export default function EnrollByQR() {
         </div>
 
         <h2 style={{ fontSize: '20px', color: 'var(--color-ink)', marginBottom: '6px', fontWeight: 700 }}>
-          {isNewAccount ? 'Create your account' : 'Sign in to enroll'}
+          {isNewAccount ? 'Register and join your class' : 'Sign in to enroll'}
         </h2>
         <p style={{ color: 'var(--color-fog)', fontSize: '14px', marginBottom: '24px' }}>
           {isNewAccount

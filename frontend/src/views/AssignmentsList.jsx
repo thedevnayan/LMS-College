@@ -12,22 +12,23 @@ export default function AssignmentsList() {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  function fetchAssignments() {
+ return assignmentsAPI.getAll().then((res) => {
+if (res.success) {
+        setAssignments(res.data);
+      }
+}).catch((err) => {
+      console.error('Failed to fetch assignments:', err);
+    }).finally(() => {
+      setLoading(false);
+    });
+ }
+
   useEffect(() => {
     fetchAssignments();
   }, []);
 
-  const fetchAssignments = async () => {
-    try {
-      const res = await assignmentsAPI.getAll();
-      if (res.success) {
-        setAssignments(res.data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch assignments:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const handleDelete = async (id, e) => {
     e.stopPropagation();

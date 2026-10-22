@@ -1,0 +1,113 @@
+{
+  "runAt": "2026-10-21T19:07:59.007Z",
+  "environment": "Single local Node process for API and clients; disposable single-node MongoDB replica set. Not a production benchmark.",
+  "students": 20,
+  "rooms": 2,
+  "httpRequests": 180,
+  "httpThroughputPerSecond": 228.81,
+  "answerThroughputPerSecond": 13.34,
+  "durationSeconds": 3.15,
+  "metrics": {
+    "http": {
+      "count": 180,
+      "p50Ms": 71.39,
+      "p95Ms": 159.52,
+      "p99Ms": 164.3,
+      "maxMs": 167.18
+    },
+    "browseJourney": {
+      "count": 60,
+      "p50Ms": 215.21,
+      "p95Ms": 354.54,
+      "p99Ms": 355.58,
+      "maxMs": 355.58
+    },
+    "socketConnect": {
+      "count": 22,
+      "p50Ms": 75.01,
+      "p95Ms": 75.91,
+      "p99Ms": 79.01,
+      "maxMs": 79.01
+    },
+    "join_test": {
+      "count": 20,
+      "p50Ms": 233.54,
+      "p95Ms": 236.27,
+      "p99Ms": 236.54,
+      "maxMs": 236.54
+    },
+    "adminJoin": {
+      "count": 2,
+      "p50Ms": 5.62,
+      "p95Ms": 6.55,
+      "p99Ms": 6.55,
+      "maxMs": 6.55
+    },
+    "releaseDelivery": {
+      "count": 20,
+      "p50Ms": 29.91,
+      "p95Ms": 36.36,
+      "p99Ms": 36.51,
+      "maxMs": 36.51
+    },
+    "start": {
+      "count": 2,
+      "p50Ms": 29.96,
+      "p95Ms": 36.66,
+      "p99Ms": 36.66,
+      "maxMs": 36.66
+    },
+    "submit_answer": {
+      "count": 20,
+      "p50Ms": 1044.26,
+      "p95Ms": 1496.41,
+      "p99Ms": 1497.66,
+      "maxMs": 1497.66
+    },
+    "rejoin": {
+      "count": 2,
+      "p50Ms": 34.61,
+      "p95Ms": 42.27,
+      "p99Ms": 42.27,
+      "maxMs": 42.27
+    },
+    "duplicateRetry": {
+      "count": 2,
+      "p50Ms": 20.66,
+      "p95Ms": 27.12,
+      "p99Ms": 27.12,
+      "maxMs": 27.12
+    },
+    "test_completed": {
+      "count": 20,
+      "p50Ms": 265.82,
+      "p95Ms": 271.04,
+      "p99Ms": 274.7,
+      "maxMs": 274.7
+    }
+  },
+  "errors": 0,
+  "failures": [],
+  "releaseDelivery": {
+    "expected": 20,
+    "observed": 20
+  },
+  "leaderboardEvents": 20,
+  "consistency": {
+    "attempts": 20,
+    "passed": true
+  },
+  "reconnections": 2,
+  "process": {
+    "peakRssMB": 184.07,
+    "cpuUserMs": 2844,
+    "cpuSystemMs": 469,
+    "eventLoopP95Ms": 53.71
+  },
+  "database": {
+    "connections": 31,
+    "queryDelta": 3008,
+    "updateDelta": 104
+  },
+  "restartRecovery": "Not exercised by this harness; reconnect and persisted-state checks only"
+}

@@ -28,10 +28,12 @@ const teachingGroupSchema = new mongoose.Schema(
       trim: true,
       // e.g. "Batch A", "Section B"
     },
+    loginEnabled: { type: Boolean, default: true },
     capacity: {
       type: Number,
       default: null,
     },
+    enrollmentRevision: { type: Number, default: 0 },
     deletedAt: {
       type: Date,
       default: null,

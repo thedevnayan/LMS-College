@@ -34,7 +34,7 @@ export default function AdminLayout({ children }) {
     { to: '/admin/materials', icon: FileText, label: 'Materials' },
     { to: '/admin/tests', icon: Zap, label: 'Tests & Quizzes' },
     { to: '/admin/students', icon: Users, label: 'Students' },
-  ];
+  ].filter(item => user?.role === 'admin' || !['/admin/mis', '/admin/academic', '/admin/curriculum', '/admin/rollover'].includes(item.to));
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--color-warm-linen)' }}>
@@ -91,7 +91,7 @@ export default function AdminLayout({ children }) {
                   whiteSpace: 'nowrap',
                 }}
               >
-                LMS Admin
+                SkillBery Admin
               </motion.span>
             )}
           </AnimatePresence>

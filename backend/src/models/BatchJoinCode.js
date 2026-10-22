@@ -50,6 +50,8 @@ const batchJoinCodeSchema = new mongoose.Schema(
       ref: 'PracticalGroup',
       default: null,
     },
+    expiresAt: { type: Date, default: null },
+    allowedEmails: { type: [String], default: [] },
     isActive: {
       type: Boolean,
       default: true,
@@ -69,8 +71,8 @@ const batchJoinCodeSchema = new mongoose.Schema(
 );
 
 batchJoinCodeSchema.index(
-  { session: 1, classBatch: 1, labBatch: 1 },
-  { unique: true, partialFilterExpression: { deletedAt: null } }
+  { teachingGroupId: 1, labBatch: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null, teachingGroupId: { $type: 'objectId' } } }
 );
 
 batchJoinCodeSchema.pre(/^find/, function () {

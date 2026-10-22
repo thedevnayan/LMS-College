@@ -20,28 +20,27 @@ export default function CollegeMIS() {
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
 
+  function fetchMISData() {
+ return Promise.all([
+        misAPI.getOverview(activeSession?._id),
+        misAPI.compareSessions(),
+      ]).then(([ovRes, compRes]) => {
+if (ovRes.success) setOverview(ovRes.data);
+if (compRes.success) setComparison(compRes.data);
+}).catch((err) => {
+      console.error('Failed to load MIS data:', err);
+    }).finally(() => {
+      setLoading(false);
+    });
+ }
+
   useEffect(() => {
     if (activeSession) {
       fetchMISData();
     }
   }, [activeSession]);
 
-  const fetchMISData = async () => {
-    try {
-      setLoading(true);
-      const [ovRes, compRes] = await Promise.all([
-        misAPI.getOverview(activeSession?._id),
-        misAPI.compareSessions(),
-      ]);
 
-      if (ovRes.success) setOverview(ovRes.data);
-      if (compRes.success) setComparison(compRes.data);
-    } catch (err) {
-      console.error('Failed to load MIS data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSearch = async (e) => {
     const q = e.target.value;

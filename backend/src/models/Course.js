@@ -57,8 +57,6 @@ const courseSchema = new mongoose.Schema(
   }
 );
 
-// TTL Index: automatically delete document 7 days (604800 seconds) after deletedAt is set
-courseSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 604800 });
 
 // Pre-find hook to exclude soft-deleted items
 courseSchema.pre(/^find/, function () {
